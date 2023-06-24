@@ -1,0 +1,1 @@
+{"float_field":1.23,"integer_field":0,"struct_field":{"list_field":[{"field1":0,"field2":"0"},{"field1":1,"field2":"1"}],"different_integer_field":123},"string_field":"test"}
