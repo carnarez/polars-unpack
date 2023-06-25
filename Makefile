@@ -32,7 +32,6 @@ test: build
 	                                 --cov=flatten_json \
 	                                 --cov-report term-missing \
 	                                 --override-ini="cache_dir=/tmp/pytest" \
-	                                 --verbose \
 	                                 --verbose
 
 clean:

@@ -1,4 +1,4 @@
-"""Automatic JSON unpacking to `Polars` `DataFrame` given a `Struct` as schema.
+"""Automatic JSON unpacking to [`Polars`](https://pola.rs) `DataFrame`.
 
 The use case is as follows:
 
@@ -8,17 +8,23 @@ The use case is as follows:
   JSON via `scan_ndjson()`) and automagically unpack the nested content by processing
   the schema.
 
-_At the moment it seems JSON fields with identical names cannot be automatically
-unpacked._
+A few extra points:
 
-This little DIY is demonstrated via:
+* The schema should be dominant and we should rename columns on the fly as they are
+  being unpacked to avoid identical names for different columns (which is forbidden by
+  `Polars`).
+* _Why not using the inferred schema?_ Because at times we need to provide _more_ fields
+  that might not be in the JSON file to fit a certain data structure, or simply ignore
+  part of the JSON data when unpacking to avoid wasting resources.
+
+The current ~~working~~ state of this little DIY can be checked via:
 
 ```shell
 $ make env
-> python flatten_json.py samples/nested.schema samples/nested.json
+> python flatten_json.py samples/complex.schema samples/complex.ndjson
 ```
 
-and can be "_thoroughly_" (-ish!) tested via:
+A "thorough" (-ish!) battery of tests can be performed via:
 
 ```shell
 $ make test
