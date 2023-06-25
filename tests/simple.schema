@@ -1,5 +1,0 @@
-Struct(
-    float_field: Float32,
-    string_field: Utf8,
-    integer_field: Int16
-)

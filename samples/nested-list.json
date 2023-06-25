@@ -1,0 +1,3 @@
+{"float_field":1.23,"integer_field":0,"struct_field":{"list_field":[{"field1":0,"field2":"0"},{"field1":1,"field2":"1"}],"different_integer_field":123},"string_field":"test"}
+{"float_field":4.56,"integer_field":1,"struct_field":{"list_field":[{"field1":2,"field2":"2"},{"field1":3,"field2":"3"}],"different_integer_field":456},"string_field":"test"}
+{"float_field":7.89,"integer_field":2,"struct_field":{"list_field":[{"field1":4,"field2":"4"},{"field1":5,"field2":"5"}],"different_integer_field":789},"string_field":"test"}

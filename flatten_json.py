@@ -1,4 +1,39 @@
-"""Testing grounds for automatic JSON unpacking."""
+"""Automatic JSON unpacking to `Polars` `DataFrame` given a `Struct` as schema.
+
+The use case is as follows:
+
+* Provide a schema written in plain text describing the JSON content, to be converted
+  into a `Polars` `Struct` (see samples in this repo for examples).
+* Read the JSON content (as plain text using `scan_csv()` for instance, or directly as
+  JSON via `scan_ndjson()`) and automagically unpack the nested content by processing
+  the schema.
+  ```python
+  # read as plain text; beware of the separator
+  df = pl.scan_csv(
+      path,
+      new_columns=["raw"],
+      has_header=False,
+      separator="|",
+  ).select(pl.col("json").str.json_extract(schema))
+  ```
+  ```python
+  # read as newline-delimited json
+  df = pl.scan_ndjson(path)
+  ```
+
+This little DIY is demonstrated via:
+
+```shell
+$ make env
+> python flatten_json.py samples/nested.schema samples/nested.json
+```
+
+and can be "_thoroughly_" (!) tested via:
+
+```shell
+$ make test
+```
+"""
 
 import pathlib
 import re
@@ -17,40 +52,50 @@ POLARS_DATATYPES: dict[str, pl.DataType] = {
     "int64": pl.Int64,
     "utf8": pl.Utf8,
     # shorthands
-    "float": pl.Float32,
-    "real": pl.Float32,
-    "int": pl.Int32,
-    "integer": pl.Int32,
+    "float": pl.Float64,
+    "real": pl.Float64,
+    "int": pl.Int64,
+    "integer": pl.Int64,
     "string": pl.Utf8,
 }
 
 
-def build_dtype(schema: str) -> pl.Struct:
-    """Parse a plain text JSON schema into a Polars datatypes.
+class SchemaParsingError(Exception):
+    """When unexpected content is encountered and cannot be parsed."""
+
+
+def parse_schema(schema: str) -> pl.Struct:
+    """Parse a plain text JSON schema into a `Polars` `Struct`.
 
     Parameters
     ----------
     schema : str
-        Content of the
+        Content of the plain text file describing the JSON schema.
 
     Returns
     -------
     : polars.Struct
-        JSON schema translated into Polars datatypes.
+        JSON schema translated into `Polars` datatypes.
 
     Raises
     ------
-    : ValueError
+    : SchemaParsingError
         When unexpected content is encountered and cannot be parsed.
+
+    Notes
+    -----
+    A nested field may not have a name! To be kept in mind when unpacking using the
+    `.explode()` and `.unnest()` methods.
     """
-    struct: list = []
+    struct: list = []  # highest level list of fields
 
-    nested_names: list[str | None] = []
-    nested_dtypes: list[pl.List | pl.Struct] = []
+    nested_names: list[str | None] = []  # names of nested objects
+    nested_dtypes: list[pl.List | pl.Struct] = []  # datatypes of nested objects
 
-    fields_of_lists: list[list[pl.DataType]] = []
-    fields_of_structs: list[list[pl.DataType]] = []
+    fields_of_lists: list[list[pl.DataType]] = []  # fields of encountered lists
+    fields_of_structs: list[list[pl.DataType]] = []  # fields of encountered structs
 
+    # continue until everything is parsed
     while len(schema):
         # new field
         if (
@@ -67,13 +112,10 @@ def build_dtype(schema: str) -> pl.Struct:
             # add the non-nested field to the current object
             else:
                 field = pl.Field(name, POLARS_DATATYPES[dtype])
-                if len(nested_dtypes):
-                    if nested_dtypes[-1] == "list":
-                        fields_of_lists[-1].append(field)
-                    else:
-                        fields_of_structs[-1].append(field)
+                if nested_dtypes:
+                    fields_of_structs[-1].append(field)
                 else:
-                    struct.append(field)
+                    struct.append(field)  # not sure this happens...
 
             schema = schema.replace(m.group(0), "", 1)
 
@@ -85,17 +127,20 @@ def build_dtype(schema: str) -> pl.Struct:
             if dtype in ("list", "struct"):
                 nested_names.append("")
                 nested_dtypes.append(dtype)
+
+            # add the non-nested field to the current object
             else:
-                e = f"{schema[:50]}..."
-                raise ValueError(e)
+                field = pl.Field("", POLARS_DATATYPES[dtype])
+                if nested_dtypes:
+                    fields_of_lists.append(POLARS_DATATYPES[dtype])
+                else:
+                    struct.append(field)
 
             schema = schema.replace(m.group(0), "", 1)
 
         # start of nested field
         elif (m := re.match(r"([(\[{<])", schema)) is not None:
-            if nested_dtypes[-1] == "list":
-                fields_of_lists.append([])
-            else:
+            if nested_dtypes[-1] == "struct":
                 fields_of_structs.append([])
 
             schema = schema.replace(m.group(0), "", 1)
@@ -107,14 +152,17 @@ def build_dtype(schema: str) -> pl.Struct:
 
             # generate the field
             if dtype == "list":
-                field = pl.Field(name, pl.List(pl.Struct(fields_of_lists.pop())))
+                if name:
+                    field = pl.Field(name, pl.List(fields_of_lists.pop()))
+                else:
+                    field = pl.List(fields_of_lists.pop())
             else:
                 field = pl.Field(name, pl.Struct(fields_of_structs.pop()))
 
             # add the nested field to the current object
-            if len(nested_dtypes):
+            if nested_dtypes:
                 if nested_dtypes[-1] == "list":
-                    fields_of_lists[-1].append(field)
+                    fields_of_lists.append(field)
                 else:
                     fields_of_structs[-1].append(field)
             else:
@@ -127,59 +175,86 @@ def build_dtype(schema: str) -> pl.Struct:
             schema = schema.replace(m.group(0), "", 1)
             continue
 
-        # unexpected content
+        # unexpected content, raise an exception
         else:
             e = f"{schema[:50]}..."
-            raise ValueError(e)
+            raise SchemaParsingError(e)
 
     return pl.Struct(struct)
 
 
-def flatten(df: pl.LazyFrame, dtype: pl.DataType) -> pl.LazyFrame:
-    """Flatten a [nested] JSON into a Polars dataframe given a schema.
+def flatten(
+    df: pl.DataFrame | pl.LazyFrame,
+    dtype: pl.DataType,
+    column: str | None = None,
+) -> pl.DataFrame | pl.LazyFrame:
+    """Flatten a [nested] JSON into a `Polars` `DataFrame` given a schema.
 
     Parameters
     ----------
-    df : polars.LazyFrame
-        Current dataframe.
+    df : polars.DataFrame | polars.LazyFrame
+        Current `Polars` `DataFrame` (or `LazyFrame`) object.
     dtype : polars.DataType
-        Datatype of the current object (polars.List or polars.Struct).
+        Datatype of the current object (`polars.List` or `polars.Struct`).
+    column : str | None
+        Column to apply the unpacking on. Defaults to `None`.
 
     Returns
     -------
-    : polars.LazyFrame
-        Updated [unpacked] dataframe.
+    : polars.DataFrame | polars.LazyFrame
+        Updated [unpacked] `Polars` `DataFrame` (or `LazyFrame`) object.
     """
-    # list of fields
-    fields = dtype.fields if hasattr(dtype, "fields") else dtype
+    # if we are dealing with the nested column itself
+    if column is not None:
+        if dtype == pl.List:
+            df = flatten(df.explode(column), dtype.inner, column)
+        elif dtype == pl.Struct:
+            df = flatten(df.unnest(column), dtype)
 
-    # unpack nested objects when encountered
-    if any(d in (pl.List, pl.Struct) for d in [f.dtype for f in fields]):
-        for f in fields:
+    # unpack nested children columns when encountered
+    elif hasattr(dtype, "fields") and any(
+        d in (pl.List, pl.Struct) for d in [f.dtype for f in dtype.fields]
+    ):
+        for f in dtype.fields:
             if type(f.dtype) == pl.List:
-                df = flatten(df.explode(f.name), f.dtype.inner)
+                df = flatten(
+                    df.explode(column if column else f.name),
+                    f.dtype.inner,
+                    f.name,
+                )
             elif type(f.dtype) == pl.Struct:
-                df = flatten(df.unnest(f.name), f.dtype)
+                df = flatten(df.unnest(column if column else f.name), f.dtype)
 
     return df
 
 
 if __name__ == "__main__":
     with pathlib.Path(sys.argv[1]).open() as f:
-        dtype = build_dtype(f.read())
+        print("---")
+
+        # parse schema
+        dtype = parse_schema(f.read())
+        print(dtype.to_schema())
+
+        print("---")
 
         # read as plain text
-        df = (
-            pl.scan_csv(
-                sys.argv[2],
-                new_columns=["raw"],
-                has_header=False,
-                separator="|",
-            ).select(pl.col("raw").str.json_extract(dtype=dtype))
-            # .unnest("raw")
-        )
-        print(flatten(df, dtype).collect())
+        df = pl.scan_csv(
+            sys.argv[2],
+            new_columns=["json"],
+            has_header=False,
+            separator="|",
+        ).select(pl.col("json").str.json_extract(dtype))
+        print(df.collect())
+        print(df.select("json").dtypes[0].to_schema())
+        print(flatten(df, dtype, "json").collect())
+
+        print("---")
 
         # read as newline-delimited json
         df = pl.scan_ndjson(sys.argv[2])
+        print(df.collect())
+        print(df.schema)
         print(flatten(df, dtype).collect())
+
+        print("---")
