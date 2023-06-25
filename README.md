@@ -9,19 +9,21 @@ The use case is as follows:
 - Read the JSON content (as plain text using `scan_csv()` for instance, or directly as
   JSON via `scan_ndjson()`) and automagically unpack the nested content by processing
   the schema.
-  ```python
-  # read as plain text; beware of the separator
-  df = pl.scan_csv(
-      path,
-      new_columns=["raw"],
-      has_header=False,
-      separator="|",
-  ).select(pl.col("json").str.json_extract(schema))
-  ```
-  ```python
-  # read as newline-delimited json
-  df = pl.scan_ndjson(path)
-  ```
+
+```python
+# read as plain text; beware of the separator!
+df = pl.scan_csv(
+    path,
+    new_columns=["json"],
+    has_header=False,
+    separator="|",
+).select(pl.col("json").str.json_extract(schema))
+```
+
+```python
+# read as newline-delimited json
+df = pl.scan_ndjson(path)
+```
 
 This little DIY is demonstrated via:
 
@@ -30,7 +32,7 @@ $ make env
 > python flatten_json.py samples/nested.schema samples/nested.json
 ```
 
-and can be "_thoroughly_" (!) tested via:
+and can be "_thoroughly_" (-ish!) tested via:
 
 ```shell
 $ make test
