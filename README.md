@@ -10,20 +10,8 @@ The use case is as follows:
   JSON via `scan_ndjson()`) and automagically unpack the nested content by processing
   the schema.
 
-```python
-# read as plain text; beware of the separator!
-df = pl.scan_csv(
-    path,
-    new_columns=["json"],
-    has_header=False,
-    separator="|",
-).select(pl.col("json").str.json_extract(schema))
-```
-
-```python
-# read as newline-delimited json
-df = pl.scan_ndjson(path)
-```
+_At the moment it seems JSON fields with identical names cannot be automatically
+unpacked._
 
 This little DIY is demonstrated via:
 
@@ -134,6 +122,8 @@ Assert capabilities of the `DataFrame` / `LazyFrame` flattener.
   `polars.Struct` containing a few fields.
 - [`test_struct_nested_in_struct()`](#test_flattenertest_struct_nested_in_struct): Test
   a `polars.Struct` nested within another `polars.Struct`.
+- [`test_real_life()`](#test_flattenertest_real_life): Test complex real life-like
+  parsing and flattening.
 
 ## Functions
 
@@ -380,6 +370,146 @@ json: Struct(
 )
 ```
 
+### `test_flattener.test_real_life`
+
+```python
+test_real_life() -> None:
+```
+
+Test complex real life-like parsing and flattening.
+
+Test the following nested JSON content:
+
+```json
+{
+    "headers": {
+        "timestamp": 1372182309,
+        "source": "Online.Transactions",
+        "offset": 123456789
+    },
+    "payload": {
+        "transaction": "inbound",
+        "location": 765,
+        "customer": {
+            "type": "REGISTERED",
+            "customerIdentifier": "a8098c1a-f86e-11da-bd1a-00112444be1e"
+        },
+        "lines": [
+            {
+                "product": 76543,
+                "productDescription": "Toilet plunger",
+                "quantity": 2,
+                "vatRate": 0.21,
+                "lineAmount": {
+                    "lineAmountIncludingVat": 10.0,
+                    "lineAmountExcludingVat": 8.26,
+                    "lineAmountVat": 1.74,
+                    "lineAmountCurrency": "EUR"
+                },
+                "discounts": [
+                    {
+                        "promotion": 100023456000789,
+                        "promotionDescription": "Buy one get two",
+                        "discountAmount": {
+                            "discountAmountIncludingVat": 10.0,
+                            "discountAmountExcludingVat": 8.26,
+                            "discountAmountVat": 1.74,
+                            "discountAmountCurrency": "EUR"
+                        }
+                    }
+                ]
+            },
+            {
+                "product": 3456,
+                "productDescription": "Toilet cap",
+                "quantity": 1,
+                "vatRate": 0.21,
+                "lineAmount": {
+                    "lineAmountIncludingVat": 30.0,
+                    "lineAmountExcludingVat": 24.79,
+                    "lineAmountVat": 5.21,
+                    "lineAmountCurrency": "EUR"
+                }
+            }
+        ],
+        "payment": {
+            "method": "Card",
+            "company": "OnlineBanking",
+            "identifier": 123456789,
+            "totalAmount": {
+                "totalAmountIncludingVat": 40.0,
+                "totalAmountExcludingVat": 33.05,
+                "totalAmountVat": 6.95,
+                "totalAmountCurrency": "EUR"
+            }
+        }
+    }
+}
+```
+
+as described by the following schema:
+
+```
+headers: Struct<
+    timestamp: Int64,
+    source: Utf8,
+    offset: Int64
+>,
+payload: Struct<
+    transaction: Utf8,
+    location: Int8,
+    customer: Struct{
+        type: Utf8,
+        registration: Utf8
+    },
+    lines: List[
+        Struct{
+            product: Int16,
+            productDescription: Utf8,
+            quantity: Int8,
+            vatRate: Float32,
+            lineAmount: Struct(
+                lineAmountIncludingVat: Float32,
+                lineAmountExcludingVat: Float32,
+                lineAmountVat: Float32,
+                lineAmountCurrency: Utf8
+            )
+            discounts: List[
+                Struct{
+                    promotion: Int64,
+                    promotionDescription: Utf8,
+                    discountAmount: Struct{
+                        discountAmountIncludingVat: Float32,
+                        discountAmountExcludingVat: Float32,
+                        discountAmountVat: Float32,
+                        discountAmountCurrency: Utf8
+                    }
+                }
+            ]
+        }
+    ]
+>
+```
+
+with the last bit of the JSON being ignored during flattening (truncated schema):
+
+```
+payload: Struct<
+    ...,
+    payment: Struct{
+        method: Utf8,
+        company: Utf8,
+        transactionIdentifier: Int64,
+        totalAmount: Struct{
+            totalAmountIncludingVat: Float32,
+            totalAmountExcludingVat: Float32,
+            totalAmountVat: Float32,
+            totalAmountCurrency: Utf8
+        }
+    }
+>
+```
+
 # Module `test_parser`
 
 Assert capabilities of the schema parser.
@@ -402,8 +532,8 @@ Assert capabilities of the schema parser.
   parsing of a `polars.Struct` within a `polars.List`.
 - [`test_struct_nested_in_struct()`](#test_parsertest_struct_nested_in_struct): Test the
   parsing of a `polars.Struct` within a `polars.Struct`.
-- [`test_complex_nested_schema()`](#test_parsertest_complex_nested_schema): Test
-  complexed schema.
+- [`test_complex_nested_schema()`](#test_parsertest_complex_nested_schema): Test complex
+  schema.
 
 ## Functions
 
@@ -468,6 +598,12 @@ test_list_nested_in_list() -> None:
 
 Test the parsing of a `polars.List` within a `polars.List`.
 
+Test the generation of the following schema:
+
+```
+List(List(Int8))
+```
+
 ### `test_parser.test_list_nested_in_struct`
 
 ```python
@@ -475,6 +611,14 @@ test_list_nested_in_struct() -> None:
 ```
 
 Test the parsing of a `polars.List` within a `polars.Struct`.
+
+Test the generation of the following schema:
+
+```
+Struct(
+    foo: List(Int8)
+)
+```
 
 ### `test_parser.test_struct_nested_in_list`
 
@@ -484,6 +628,17 @@ test_struct_nested_in_list() -> None:
 
 Test the parsing of a `polars.Struct` within a `polars.List`.
 
+Test the generation of the following schema:
+
+```
+List(
+    Struct(
+        foo: Int8,
+        bar: Int8
+    )
+)
+```
+
 ### `test_parser.test_struct_nested_in_struct`
 
 ```python
@@ -492,26 +647,153 @@ test_struct_nested_in_struct() -> None:
 
 Test the parsing of a `polars.Struct` within a `polars.Struct`.
 
+Test the generation of the following schema:
+
+```
+Struct(
+    foo: Struct(
+        bar: Int8
+    )
+)
+```
+
 ### `test_parser.test_complex_nested_schema`
 
 ```python
 test_complex_nested_schema() -> None:
 ```
 
-Test complexed schema.
+Test complex schema.
 
 Test the following nested JSON content:
 
 ```json
+{
+    "headers": {
+        "timestamp": 1372182309,
+        "source": "Online.Transactions",
+        "offset": 123456789
+    },
+    "payload": {
+        "transaction": "inbound",
+        "location": 765,
+        "customer": {
+            "type": "REGISTERED",
+            "customerIdentifier": "a8098c1a-f86e-11da-bd1a-00112444be1e"
+        },
+        "lines": [
+            {
+                "product": 76543,
+                "productDescription": "Toilet plunger",
+                "quantity": 2,
+                "vatRate": 0.21,
+                "lineAmount": {
+                    "lineAmountIncludingVat": 10.0,
+                    "lineAmountExcludingVat": 8.26,
+                    "lineAmountVat": 1.74,
+                    "lineAmountCurrency": "EUR"
+                },
+                "discounts": [
+                    {
+                        "promotion": 100023456000789,
+                        "promotionDescription": "Buy one get two",
+                        "discountAmount": {
+                            "discountAmountIncludingVat": 10.0,
+                            "discountAmountExcludingVat": 8.26,
+                            "discountAmountVat": 1.74,
+                            "discountAmountCurrency": "EUR"
+                        }
+                    }
+                ]
+            },
+            {
+                "product": 3456,
+                "productDescription": "Toilet cap",
+                "quantity": 1,
+                "vatRate": 0.21,
+                "lineAmount": {
+                    "lineAmountIncludingVat": 30.0,
+                    "lineAmountExcludingVat": 24.79,
+                    "lineAmountVat": 5.21,
+                    "lineAmountCurrency": "EUR"
+                }
+            }
+        ],
+        "payment": {
+            "method": "Card",
+            "company": "OnlineBanking",
+            "identifier": 123456789,
+            "totalAmount": {
+                "totalAmountIncludingVat": 40.0,
+                "totalAmountExcludingVat": 33.05,
+                "totalAmountVat": 6.95,
+                "totalAmountCurrency": "EUR"
+            }
+        }
+    }
+}
 ```
 
 as described by the following schema:
 
 ```
+headers: Struct<
+    timestamp: Int64,
+    source: Utf8,
+    offset: Int64
+>,
+payload: Struct<
+    transaction: Utf8,
+    location: Int8,
+    customer: Struct{
+        type: Utf8,
+        registration: Utf8
+    },
+    lines: List[
+        Struct{
+            product: Int16,
+            productDescription: Utf8,
+            quantity: Int8,
+            vatRate: Float32,
+            lineAmount: Struct(
+                lineAmountIncludingVat: Float32,
+                lineAmountExcludingVat: Float32,
+                lineAmountVat: Float32,
+                lineAmountCurrency: Utf8
+            )
+            discounts: List[
+                Struct{
+                    promotion: Int64,
+                    promotionDescription: Utf8,
+                    discountAmount: Struct{
+                        discountAmountIncludingVat: Float32,
+                        discountAmountExcludingVat: Float32,
+                        discountAmountVat: Float32,
+                        discountAmountCurrency: Utf8
+                    }
+                }
+            ]
+        }
+    ],
+    payment: Struct{
+        method: Utf8,
+        company: Utf8,
+        transactionIdentifier: Int64,
+        totalAmount: Struct{
+            totalAmountIncludingVat: Float32,
+            totalAmountExcludingVat: Float32,
+            totalAmountVat: Float32,
+            totalAmountCurrency: Utf8
+        }
+    }
+>
 ```
 
 **Notes**
 
 This complex example actively tests most capabilities of the parser:
 
-- Nesting
+- Nesting of various datatypes
+- Different delimiters
+- Missing fields
+- Extra fields

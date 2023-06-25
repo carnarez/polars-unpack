@@ -1,0 +1,39 @@
+headers: Struct<
+    timestamp: Int64,
+    source: Utf8,
+    offset: Int64
+>,
+payload: Struct<
+    transaction: Utf8,
+    location: Int8,
+    customer: Struct{
+        type: Utf8,
+        customerIdentifier: Utf8
+    },
+    lines: List[
+        Struct{
+            product: Int16,
+            productDescription: Utf8,
+            quantity: Int8,
+            vatRate: Float32,
+            lineAmount: Struct(
+                lineAmountIncludingVat: Float32,
+                lineAmountExcludingVat: Float32,
+                lineAmountVat: Float32,
+                lineAmountCurrency: Utf8
+            )
+            discounts: List[
+                Struct{
+                    promotion: Int64,
+                    promotionDescription: Utf8,
+                    discountAmount: Struct{
+                        discountAmountIncludingVat: Float32,
+                        discountAmountExcludingVat: Float32,
+                        discountAmountVat: Float32,
+                        discountAmountCurrency: Utf8
+                    }
+                }
+            ]
+        }
+    ]
+>

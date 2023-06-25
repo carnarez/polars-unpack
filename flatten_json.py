@@ -8,20 +8,8 @@ The use case is as follows:
   JSON via `scan_ndjson()`) and automagically unpack the nested content by processing
   the schema.
 
-```python
-# read as plain text; beware of the separator!
-df = pl.scan_csv(
-    path,
-    new_columns=["json"],
-    has_header=False,
-    separator="|",
-).select(pl.col("json").str.json_extract(schema))
-```
-
-```python
-# read as newline-delimited json
-df = pl.scan_ndjson(path)
-```
+_At the moment it seems JSON fields with identical names cannot be automatically
+unpacked._
 
 This little DIY is demonstrated via:
 
