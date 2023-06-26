@@ -10,25 +10,32 @@ The use case is as follows:
 
 A few extra points:
 
-* The schema should be dominant and we should rename columns on the fly as they are
-  being unpacked to avoid identical names for different columns (which is forbidden by
-  `Polars`).
-* _Why not using the inferred schema?_ Because at times we need to provide _more_ fields
-  that might not be in the JSON file to fit a certain data structure, or simply ignore
-  part of the JSON data when unpacking to avoid wasting resources.
+* The schema should be dominant and we should rename fields as they are being unpacked
+  to avoid identical names for different columns (which is forbidden by `Polars`).
+* _Why not using the inferred schema?_ Because at times we need to provide fields that
+  might _not_ be in the JSON file to fit a certain data structure, or simply ignore
+  part of the JSON data when unpacking to avoid wasting resources. Oh, and to rename
+  fields too.
 
-The current ~~working~~ state of this little DIY can be checked via:
+The current ~~working~~ state of this little DIY can be checked (in `Docker`) via:
 
 ```shell
 $ make env
-> python flatten_json.py samples/complex.schema samples/complex.ndjson
+> python unpack.py samples/complex.schema samples/complex.ndjson
 ```
 
-A "thorough" (-ish!) battery of tests can be performed via:
+A thorough(-ish) battery of tests can be performed (in `Docker`) via:
 
 ```shell
 $ make test
 ```
+
+Although testing various functionalities, these tests are pretty independent. But the
+`test_real_life()` functions working on a common example
+([schema](/samples/complex.schema) & [data](/samples/complex.ndjson)) are there to check
+if this is only fantasy. Running is convincing!
+
+Feel free to extend the functionalities to your own use case.
 """
 
 import pathlib
@@ -58,6 +65,71 @@ POLARS_DATATYPES: dict[str, pl.DataType] = {
 
 class SchemaParsingError(Exception):
     """When unexpected content is encountered and cannot be parsed."""
+
+
+def infer_schema(path_data: str) -> str:
+    """Lazily scan JSON data and output the `Polars`-inferred schema in plain text.
+
+    Parameters
+    ----------
+    path_data : str
+        Path to a JSON file for `Polars` to infer its own schema (_e.g._, `Struct`
+        object).
+
+    Returns
+    -------
+    : str
+        Pretty-printed `Polars` JSON schema.
+
+    Notes
+    -----
+    This is merely to test the output of the schema parser defined in this very script.
+    """
+    # eww
+    def _pprint(field: str, dtype: pl.DataType, indent: str = "") -> str:
+        """Recursively loop over the inferred schema and pretty print its structure.
+
+        Parameters
+        ----------
+        field : str
+            Name of the current field, including `:` separator.
+        dtype : polars.DataType
+            Datatype of the current field; nested or not.
+        indent : str
+            String used to indent (a number of spaces).
+
+        Returns
+        -------
+        : str
+            Pretty-printed field name and datatype of the current field.
+        """
+        schema = ""
+
+        # Struct
+        if hasattr(dtype, "fields"):
+            schema += f"{indent}{field}{dtype.__class__.__name__}(\n"
+            for f, d in dtype.to_schema().items():
+                schema += _pprint(f"{f}: ", d, f"{indent}    ")
+            schema += f"{indent})\n"
+
+        # Array, List
+        elif hasattr(dtype, "inner"):
+            schema += f"{indent}{field}{dtype.__class__.__name__}(\n"
+            schema += _pprint("", dtype.inner, f"{indent}    ")
+            schema += f"{indent})\n"
+
+        # non-nested datatypes
+        else:
+            schema += f"{indent}{field}{dtype}\n"
+
+        return schema
+
+    # generate the pretty-printed schema
+    schema = ""
+    for field, dtype in pl.scan_ndjson(path_data).schema.items():
+        schema += _pprint(f"{field}: ", dtype)
+
+    return schema.strip()
 
 
 def parse_schema(schema: str) -> pl.Struct:
@@ -179,7 +251,7 @@ def parse_schema(schema: str) -> pl.Struct:
     return pl.Struct(struct)
 
 
-def flatten(
+def unpack_frame(
     df: pl.DataFrame | pl.LazyFrame,
     dtype: pl.DataType,
     column: str | None = None,
@@ -203,9 +275,9 @@ def flatten(
     # if we are dealing with the nested column itself
     if column is not None:
         if dtype == pl.List:
-            df = flatten(df.explode(column), dtype.inner, column)
+            df = unpack_frame(df.explode(column), dtype.inner, column)
         elif dtype == pl.Struct:
-            df = flatten(df.unnest(column), dtype)
+            df = unpack_frame(df.unnest(column), dtype)
 
     # unpack nested children columns when encountered
     elif hasattr(dtype, "fields") and any(
@@ -213,44 +285,84 @@ def flatten(
     ):
         for f in dtype.fields:
             if type(f.dtype) == pl.List:
-                df = flatten(
+                df = unpack_frame(
                     df.explode(column if column else f.name),
                     f.dtype.inner,
                     f.name,
                 )
             elif type(f.dtype) == pl.Struct:
-                df = flatten(df.unnest(column if column else f.name), f.dtype)
+                df = unpack_frame(df.unnest(column if column else f.name), f.dtype)
 
     return df
 
 
+def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
+    """Read (scan) and unpack a newline-delimited JSON file given a schema.
+
+    Parameters
+    ----------
+    path_schema : str
+        Path to the plain text schema describing the JSON content.
+    path_data : str
+        Path to the JSON file (or multiple files via glob patterns).
+
+    Returns
+    -------
+    : polars.LazyFrame
+        Unpacked JSON content, lazy style.
+    """
+    with pathlib.Path(path_schema).open() as f:
+        return unpack_frame(pl.scan_ndjson(path_data), parse_schema(f.read()))
+
+
+def unpack_text(path_schema: str, path_data: str, delimiter: str = "|") -> pl.LazyFrame:
+    r"""Read (scan) and unpack a JSON file read a plain text, given a schema.
+
+    Parameters
+    ----------
+    path_schema : str
+        Path to the plain text schema describing the JSON content.
+    path_data : str
+        Path to the JSON file (or multiple files via glob patterns).
+    delimiter : str
+        Delimiter to use when parsing the "CSV" file; it should \*NOT\* be present in
+        the file at all. Defaults to `|`.
+
+    Returns
+    -------
+    : polars.LazyFrame
+        Unpacked JSON content, lazy style.
+
+    Notes
+    -----
+    This is mostly a test, to verify the output would be identical, as this unpacking
+    use case could be applied on a CSV column containing some JSON content for isntance.
+    The preferred way for native JSON content remains to use the `unpack_ndjson()`
+    function defined in this same script.
+    """
+    with pathlib.Path(path_schema).open() as f:
+        schema = parse_schema(f.read())
+
+        return unpack_frame(
+            (
+                pl.scan_csv(
+                    path_data,
+                    has_header=False,
+                    new_columns=["json"],
+                    delimiter=delimiter,
+                ).select(pl.col("json").str.json_extract(schema))
+            ),
+            schema,
+        )
+
+
 if __name__ == "__main__":
-    with pathlib.Path(sys.argv[1]).open() as f:
-        print("---")
-
-        # parse schema
-        dtype = parse_schema(f.read())
-        print(dtype.to_schema())
-
-        print("---")
-
-        # read as plain text
-        df = pl.scan_csv(
-            sys.argv[2],
-            new_columns=["json"],
-            has_header=False,
-            separator="|",
-        ).select(pl.col("json").str.json_extract(dtype))
-        print(df.collect())
-        print(df.select("json").dtypes[0].to_schema())
-        print(flatten(df, dtype, "json").collect())
-
-        print("---")
-
-        # read as newline-delimited json
-        df = pl.scan_ndjson(sys.argv[2])
-        print(df.collect())
-        print(df.schema)
-        print(flatten(df, dtype).collect())
-
-        print("---")
+    # infer schema from ndjson
+    if len(sys.argv[1:]) == 1 and sys.argv[1].endswith("ndjson"):
+        sys.stdout.write(infer_schema(sys.argv[1]))
+    # unpack ndjson given a schema
+    elif len(sys.argv[1:]) == 2:
+        sys.stdout.write(f"{unpack_ndjson(sys.argv[1], sys.argv[2]).fetch(3)}\n")
+    # usage
+    else:
+        sys.stderr.write(f"Usage: python3.1X {sys.argv[0]} <SCHEMA> <NDJSON>\n")

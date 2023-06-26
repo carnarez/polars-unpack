@@ -5,7 +5,7 @@ import pathlib
 
 import polars as pl
 
-from flatten_json import flatten, parse_schema
+from unpack import parse_schema, unpack_frame
 
 
 def test_standalone_datatype() -> None:
@@ -33,7 +33,7 @@ def test_standalone_datatype() -> None:
 
     assert parse_schema("Int64") == dtype
     assert dtype.to_schema() == df.schema
-    assert flatten(df, dtype).frame_equal(df)
+    assert unpack_frame(df, dtype).frame_equal(df)
 
 
 def test_simple_list() -> None:
@@ -77,7 +77,7 @@ def test_simple_list() -> None:
 
     assert parse_schema("text:Utf8,json:List(Int64)") == dtype
     assert dtype.to_schema() == df.schema
-    assert flatten(df, dtype).frame_equal(df.explode("json"))
+    assert unpack_frame(df, dtype).frame_equal(df.explode("json"))
 
 
 def test_list_nested_in_list_nested_in_list() -> None:
@@ -147,7 +147,7 @@ def test_list_nested_in_list_nested_in_list() -> None:
 
     assert parse_schema("text:Utf8,json:List(List(List(Int64)))") == dtype
     assert dtype.to_schema() == df.schema
-    assert flatten(df, dtype).frame_equal(
+    assert unpack_frame(df, dtype).frame_equal(
         df.explode("json").explode("json").explode("json"),
     )
 
@@ -225,7 +225,7 @@ def test_list_nested_in_struct() -> None:
         == dtype
     )
     assert dtype.to_schema() == df.schema
-    assert flatten(df, dtype).frame_equal(
+    assert unpack_frame(df, dtype).frame_equal(
         df.unnest("json").unnest("foo").explode("bar"),
     )
 
@@ -285,7 +285,7 @@ def test_struct_nested_in_list() -> None:
 
     assert parse_schema("text:Utf8,json:List(Struct(foo:Int64,bar:Int64))") == dtype
     assert dtype.to_schema() == df.schema
-    assert flatten(df, dtype).frame_equal(df.explode("json").unnest("json"))
+    assert unpack_frame(df, dtype).frame_equal(df.explode("json").unnest("json"))
 
 
 def test_simple_struct() -> None:
@@ -333,7 +333,7 @@ def test_simple_struct() -> None:
 
     assert parse_schema("text:Utf8,json:Struct(foo:Int64,bar:Int64)") == dtype
     assert dtype.to_schema() == df.schema
-    assert flatten(df, dtype).frame_equal(df.unnest("json"))
+    assert unpack_frame(df, dtype).frame_equal(df.unnest("json"))
 
 
 def test_struct_nested_in_struct() -> None:
@@ -419,7 +419,7 @@ def test_struct_nested_in_struct() -> None:
         == dtype
     )
     assert dtype.to_schema() == df.schema
-    assert flatten(df, dtype).frame_equal(df.unnest("json").unnest("foo", "bar"))
+    assert unpack_frame(df, dtype).frame_equal(df.unnest("json").unnest("foo", "bar"))
 
 
 def test_real_life() -> None:
@@ -592,7 +592,7 @@ def test_real_life() -> None:
         )
 
     assert (
-        flatten(df_ndjson, dtype)
+        unpack_frame(df_ndjson, dtype)
         .drop("payment")
         .collect()
         .frame_equal(df_csv.collect())

@@ -5,7 +5,7 @@ import pathlib
 import polars as pl
 import pytest
 
-from flatten_json import POLARS_DATATYPES, SchemaParsingError, parse_schema
+from unpack import POLARS_DATATYPES, SchemaParsingError, parse_schema
 
 
 def test_unexpected_syntax() -> None:
@@ -182,7 +182,7 @@ def test_struct_nested_in_struct() -> None:
     assert parse_schema("Struct(foo: Struct(bar: Int8))") == struct
 
 
-def test_complex_nested_schema() -> None:
+def test_real_life() -> None:
     """Test complex schema.
 
     Test the following nested JSON content:
