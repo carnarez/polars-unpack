@@ -52,7 +52,7 @@
         "payment": {
             "method": "Card",
             "company": "OnlineBanking",
-            "identifier": 123456789,
+            "transactionIdentifier": 123456789,
             "totalAmount": {
                 "totalAmountIncludingVat": 40.0,
                 "totalAmountExcludingVat": 33.05,

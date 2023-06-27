@@ -5,7 +5,13 @@ import pathlib
 import polars as pl
 import pytest
 
-from unpack import POLARS_DATATYPES, SchemaParsingError, parse_schema
+from unpack import POLARS_DATATYPES, SchemaParsingError, infer_schema, parse_schema
+
+
+def test_pretty_printing() -> None:
+    """Test whether an inferred schema is correctly printed."""
+    with pathlib.Path("samples/nested-list.schema").open() as f:
+        assert infer_schema("samples/nested-list.ndjson") == f.read().strip()
 
 
 def test_unexpected_syntax() -> None:
@@ -149,6 +155,12 @@ def test_struct_nested_in_list() -> None:
         )
     )
     ```
+
+    Notes
+    -----
+    It seems `Polars` only accepts input starting with `{`, but not `[` (such as a JSON
+    lists); although the schema described above is valid in a JSON sense, the associated
+    data will not be ingested by `Polars`.
     """
     struct = pl.Struct(
         [pl.List(pl.Struct([pl.Field("foo", pl.Int8), pl.Field("bar", pl.Int8)]))],
@@ -308,14 +320,6 @@ def test_real_life() -> None:
         }
     >
     ```
-
-    Notes
-    -----
-    This complex example actively tests most capabilities of the parser:
-    * Nesting of various datatypes
-    * Different delimiters
-    * Missing fields
-    * Extra fields
     """
     with pathlib.Path("samples/complex.schema").open() as f:
         dtype = parse_schema(f.read())

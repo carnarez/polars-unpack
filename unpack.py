@@ -18,6 +18,11 @@ A few extra points:
   part of the JSON data when unpacking to avoid wasting resources. Oh, and to rename
   fields too.
 
+Limitations encountered so far:
+
+* It seems `Polars` only accepts input starting with `{`, but not `[` (such as a JSON
+  lists); although valid in a JSON sense...
+
 The current ~~working~~ state of this little DIY can be checked (in `Docker`) via:
 
 ```shell
@@ -79,7 +84,6 @@ POLARS_DATATYPES: dict[str, pl.DataType] = {
 
 
 class SchemaParsingError(Exception):
-    # TODO tune this output
     """When unexpected content is encountered and cannot be parsed."""
 
 
@@ -113,7 +117,8 @@ def infer_schema(path_data: str) -> str:
         dtype : polars.DataType
             Datatype of the current field; nested or not.
         indent : str
-            String used to indent (a number of spaces).
+            String used to indent (a number of spaces?); defaults to empty string
+            (`""`).
 
         Returns
         -------
@@ -216,12 +221,10 @@ def parse_schema(source: str) -> pl.Struct:
                 nested_dtypes.append(dtype)
 
             # add the non-nested field to the current object
+            elif nested_dtypes:
+                fields_of_lists.append(POLARS_DATATYPES[dtype])
             else:
-                field = pl.Field("", POLARS_DATATYPES[dtype])
-                if nested_dtypes:
-                    fields_of_lists.append(POLARS_DATATYPES[dtype])
-                else:
-                    struct.append(field)
+                struct.append(pl.Field("", POLARS_DATATYPES[dtype]))
 
             schema = schema.replace(m.group(0), "", 1)
 
@@ -239,10 +242,17 @@ def parse_schema(source: str) -> pl.Struct:
 
             # generate the field
             if dtype == "list":
+                f = fields_of_lists.pop()
+                # named list
                 if name:
-                    field = pl.Field(name, pl.List(fields_of_lists.pop()))
+                    field = (
+                        pl.Field(name, pl.List(f.dtype))
+                        if hasattr(f, "dtype")
+                        else pl.Field(name, pl.List(f))
+                    )
+                # list within list
                 else:
-                    field = pl.List(fields_of_lists.pop())
+                    field = pl.List(f.dtype) if hasattr(f, "dtype") else pl.List(f)
             else:
                 field = pl.Field(name, pl.Struct(fields_of_structs.pop()))
 
@@ -317,7 +327,8 @@ def unpack_frame(
                 )
             elif type(f.dtype) == pl.Struct:
                 df = unpack_frame(
-                    df.unnest(column if column is not None else f.name), f.dtype,
+                    df.unnest(column if column is not None else f.name),
+                    f.dtype,
                 )
 
     return df
@@ -352,8 +363,9 @@ def unpack_text(path_schema: str, path_data: str, delimiter: str = "|") -> pl.La
     path_data : str
         Path to the JSON file (or multiple files via glob patterns).
     delimiter : str
-        Delimiter to use when parsing the "CSV" file; it should \*NOT\* be present in
-        the file at all. Defaults to `|`.
+        Delimiter to use when parsing the JSON file as a CSV; defaults to `|` but `#` or
+        `$` could be good candidates too. Note this delimiter should \*NOT\* be present
+        in the file at all (`,` or `:` are thus out of scope given the JSON context).
 
     Returns
     -------
@@ -386,7 +398,7 @@ def unpack_text(path_schema: str, path_data: str, delimiter: str = "|") -> pl.La
 if __name__ == "__main__":
     # infer schema from ndjson
     if len(sys.argv[1:]) == 1 and sys.argv[1].endswith("ndjson"):
-        sys.stdout.write(infer_schema(sys.argv[1]))
+        sys.stdout.write(f"{infer_schema(sys.argv[1])}\n")
     # unpack ndjson given a schema
     elif len(sys.argv[1:]) == 2:
         sys.stdout.write(f"{unpack_ndjson(sys.argv[1], sys.argv[2]).fetch(3)}\n")

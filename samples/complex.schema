@@ -1,39 +1,50 @@
 headers: Struct<
-    timestamp: Int64,
-    source: Utf8,
+    timestamp: Int64
+    source: Utf8
     offset: Int64
->,
+>
 payload: Struct<
-    transaction: Utf8,
-    location: Int8,
+    transaction: Utf8
+    location: Int64
     customer: Struct{
-        type: Utf8,
+        type: Utf8
         customerIdentifier: Utf8
-    },
+    }
     lines: List[
         Struct{
-            product: Int16,
-            productDescription: Utf8,
-            quantity: Int8,
-            vatRate: Float32,
+            product: Int64
+            productDescription: Utf8
+            quantity: Int64
+            vatRate: Float64
             lineAmount: Struct(
-                lineAmountIncludingVat: Float32,
-                lineAmountExcludingVat: Float32,
-                lineAmountVat: Float32,
+                lineAmountIncludingVat: Float64
+                lineAmountExcludingVat: Float64
+                lineAmountVat: Float64
                 lineAmountCurrency: Utf8
             )
             discounts: List[
                 Struct{
-                    promotion: Int64,
-                    promotionDescription: Utf8,
+                    promotion: Int64
+                    promotionDescription: Utf8
                     discountAmount: Struct{
-                        discountAmountIncludingVat: Float32,
-                        discountAmountExcludingVat: Float32,
-                        discountAmountVat: Float32,
+                        discountAmountIncludingVat: Float64
+                        discountAmountExcludingVat: Float64
+                        discountAmountVat: Float64
                         discountAmountCurrency: Utf8
                     }
                 }
             ]
         }
     ]
+    payment: Struct{
+        method: Utf8
+        company: Utf8
+        transactionIdentifier: Int64
+        totalAmount: Struct{
+            totalAmountIncludingVat: Float64
+            totalAmountExcludingVat: Float64
+            totalAmountVat: Float64
+            totalAmountCurrency: Utf8
+        }
+    }
 >

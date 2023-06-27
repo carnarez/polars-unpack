@@ -20,6 +20,11 @@ A few extra points:
   of the JSON data when unpacking to avoid wasting resources. Oh, and to rename fields
   too.
 
+Limitations encountered so far:
+
+- It seems `Polars` only accepts input starting with `{`, but not `[` (such as a JSON
+  lists); although valid in a JSON sense...
+
 The current ~~working~~ state of this little DIY can be checked (in `Docker`) via:
 
 ```shell
@@ -176,8 +181,10 @@ Read (scan) and unpack a JSON file read a plain text, given a schema.
 
 - `path_schema` \[`str`\]: Path to the plain text schema describing the JSON content.
 - `path_data` \[`str`\]: Path to the JSON file (or multiple files via glob patterns).
-- `delimiter` \[`str`\]: Delimiter to use when parsing the "CSV" file; it should \*NOT\*
-  be present in the file at all. Defaults to `|`.
+- `delimiter` \[`str`\]: Delimiter to use when parsing the JSON file as a CSV; defaults
+  to `|` but `#` or `$` could be good candidates too. Note this delimiter should \*NOT\*
+  be present in the file at all (`,` or `:` are thus out of scope given the JSON
+  context).
 
 **Returns**
 

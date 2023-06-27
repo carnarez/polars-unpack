@@ -1,13 +1,17 @@
-float_field: Float32,
-integer_field: Int16,
-list_field: List{Int32},
-struct_field: Struct<
-    list_field: List[
+float_field: Float64
+integer_field: Int64
+struct_field: Struct(
+    list_field: List(
         Struct(
-            field1: Int64,
+            field1: Int64
             field2: Utf8
         )
-    >,
-    different_integer_field: Int32
-),
+    )
+    different_integer_field: Int64
+    another_list: List(
+        List(
+            Int64
+        )
+    )
+)
 string_field: Utf8

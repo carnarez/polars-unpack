@@ -534,15 +534,7 @@ def test_real_life() -> None:
                     }
                 ]
             }
-        ]
-    >
-    ```
-
-    with the last bit of the JSON being ignored during flattening (truncated schema):
-
-    ```
-    payload: Struct<
-        ...,
+        ],
         payment: Struct{
             method: Utf8,
             company: Utf8,
@@ -561,7 +553,7 @@ def test_real_life() -> None:
         dtype = parse_schema(f.read())
 
     with pathlib.Path("samples/complex.ndjson") as p:
-        df_ndjson = pl.scan_ndjson(p)
+        df_ndjson = unpack_frame(pl.scan_ndjson(p), dtype).collect()
 
     with pathlib.Path("samples/complex.csv") as p:
         df_csv = pl.scan_csv(
@@ -571,29 +563,32 @@ def test_real_life() -> None:
                 "source": pl.Utf8,
                 "offset": pl.Int64,
                 "transaction": pl.Utf8,
-                "location": pl.Int8,
+                "location": pl.Int64,
                 "type": pl.Utf8,
                 "customerIdentifier": pl.Utf8,
-                "product": pl.Int16,
+                "product": pl.Int64,
                 "productDescription": pl.Utf8,
-                "quantity": pl.Int8,
-                "vatRate": pl.Float32,
-                "lineAmountIncludingVat": pl.Float32,
-                "lineAmountExcludingVat": pl.Float32,
-                "lineAmountVat": pl.Float32,
+                "quantity": pl.Int64,
+                "vatRate": pl.Float64,
+                "lineAmountIncludingVat": pl.Float64,
+                "lineAmountExcludingVat": pl.Float64,
+                "lineAmountVat": pl.Float64,
                 "lineAmountCurrency": pl.Utf8,
                 "promotion": pl.Int64,
                 "promotionDescription": pl.Utf8,
-                "discountAmountIncludingVat": pl.Float32,
-                "discountAmountExcludingVat": pl.Float32,
-                "discountAmountVat": pl.Float32,
+                "discountAmountIncludingVat": pl.Float64,
+                "discountAmountExcludingVat": pl.Float64,
+                "discountAmountVat": pl.Float64,
                 "discountAmountCurrency": pl.Utf8,
+                "method": pl.Utf8,
+                "company": pl.Utf8,
+                "transactionIdentifier": pl.Int64,
+                "totalAmountIncludingVat": pl.Float64,
+                "totalAmountExcludingVat": pl.Float64,
+                "totalAmountVat": pl.Float64,
+                "totalAmountCurrency": pl.Utf8,
             },
-        )
+        ).collect()
 
-    assert (
-        unpack_frame(df_ndjson, dtype)
-        .drop("payment")
-        .collect()
-        .frame_equal(df_csv.collect())
-    )
+    assert df_ndjson.dtypes == df_csv.dtypes
+    assert df_ndjson.frame_equal(df_csv)
