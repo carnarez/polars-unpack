@@ -23,7 +23,7 @@ A few extra points:
 Limitations encountered so far:
 
 - It seems `Polars` only accepts input starting with `{`, but not `[` (such as a JSON
-  lists); although valid in a JSON sense...
+  list); although valid in a JSON sense...
 
 The current ~~working~~ state of this little DIY can be checked (in `Docker`) via:
 
@@ -64,8 +64,8 @@ Feel free to extend the functionalities to your own use case.
   `DataFrame` or `LazyFrame` given a schema.
 - [`unpack_ndjson()`](#unpackunpack_ndjson): Read (scan) and unpack a newline-delimited
   JSON file given a schema.
-- [`unpack_text()`](#unpackunpack_text): Read (scan) and unpack a JSON file read a plain
-  text, given a schema.
+- [`unpack_text()`](#unpackunpack_text): Read (scan) and unpack a JSON file read as
+  plain text, given a schema.
 
 **Classes**
 
@@ -98,14 +98,14 @@ This is merely to test the output of the schema parser defined in this very scri
 ### `unpack.parse_schema`
 
 ```python
-parse_schema(source: str) -> pl.Struct:
+parse_schema(schema: str) -> pl.Struct:
 ```
 
 Parse a plain text JSON schema into a `Polars` `Struct`.
 
 **Parameters**
 
-- `source` \[`str`\]: Content of the plain text file describing the JSON schema.
+- `schema` \[`str`\]: Content of the plain text file describing the JSON schema.
 
 **Returns**
 
@@ -175,7 +175,7 @@ Read (scan) and unpack a newline-delimited JSON file given a schema.
 unpack_text(path_schema: str, path_data: str, delimiter: str = "|") -> pl.LazyFrame:
 ```
 
-Read (scan) and unpack a JSON file read a plain text, given a schema.
+Read (scan) and unpack a JSON file read as plain text, given a schema.
 
 **Parameters**
 

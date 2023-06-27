@@ -21,7 +21,7 @@ A few extra points:
 Limitations encountered so far:
 
 * It seems `Polars` only accepts input starting with `{`, but not `[` (such as a JSON
-  lists); although valid in a JSON sense...
+  list); although valid in a JSON sense...
 
 The current ~~working~~ state of this little DIY can be checked (in `Docker`) via:
 
@@ -154,12 +154,13 @@ def infer_schema(path_data: str) -> str:
     return schema.strip()
 
 
-def parse_schema(source: str) -> pl.Struct:
+# TODO refactor this
+def parse_schema(schema: str) -> pl.Struct:
     """Parse a plain text JSON schema into a `Polars` `Struct`.
 
     Parameters
     ----------
-    source : str
+    schema : str
         Content of the plain text file describing the JSON schema.
 
     Returns
@@ -177,15 +178,13 @@ def parse_schema(source: str) -> pl.Struct:
     A nested field may not have a name! To be kept in mind when unpacking using the
     `.explode()` and `.unnest()` methods.
     """
-    schema = source  # keep the initial source untouched for clear exception output
+    root_struct: list = []
 
-    struct: list = []  # highest level list of fields
+    parent_names: list[str | None] = []  # names of parent objects (allowing nesting)
+    parent_dtypes: list[pl.List | pl.Struct] = []  # datatypes of parent objects
 
-    nested_names: list[str | None] = []  # names of nested objects
-    nested_dtypes: list[pl.List | pl.Struct] = []  # datatypes of nested objects
-
-    fields_of_lists: list[list[pl.DataType]] = []  # fields of encountered lists
-    fields_of_structs: list[list[pl.DataType]] = []  # fields of encountered structs
+    within_lists: list[list[pl.DataType]] = []  # children objects within each list
+    within_structs: list[list[pl.DataType]] = []  # children objects within each struct
 
     # continue until everything is parsed
     while len(schema):
@@ -198,16 +197,16 @@ def parse_schema(source: str) -> pl.Struct:
 
             # keep track of the last nested object encountered
             if dtype in ("list", "struct"):
-                nested_names.append(name)
-                nested_dtypes.append(dtype)
+                parent_names.append(name)
+                parent_dtypes.append(dtype)
 
             # add the non-nested field to the current object
             else:
                 field = pl.Field(name, POLARS_DATATYPES[dtype])
-                if nested_dtypes:
-                    fields_of_structs[-1].append(field)
+                if parent_dtypes:
+                    within_structs[-1].append(field)
                 else:
-                    struct.append(field)  # not sure this happens...
+                    root_struct.append(field)  # not sure this happens...
 
             schema = schema.replace(m.group(0), "", 1)
 
@@ -217,32 +216,32 @@ def parse_schema(source: str) -> pl.Struct:
 
             # keep track of the last nested object encountered
             if dtype in ("list", "struct"):
-                nested_names.append("")
-                nested_dtypes.append(dtype)
+                parent_names.append("")
+                parent_dtypes.append(dtype)
 
             # add the non-nested field to the current object
-            elif nested_dtypes:
-                fields_of_lists.append(POLARS_DATATYPES[dtype])
+            elif parent_dtypes:
+                within_lists.append(POLARS_DATATYPES[dtype])
             else:
-                struct.append(pl.Field("", POLARS_DATATYPES[dtype]))
+                root_struct.append(pl.Field("", POLARS_DATATYPES[dtype]))
 
             schema = schema.replace(m.group(0), "", 1)
 
         # start of nested field
         elif (m := re.match(r"([(\[{<])", schema)) is not None:
-            if nested_dtypes[-1] == "struct":
-                fields_of_structs.append([])
+            if parent_dtypes[-1] == "struct":
+                within_structs.append([])
 
             schema = schema.replace(m.group(0), "", 1)
 
         # end of nested field
         elif (m := re.match(r"([)\]}>])", schema)) is not None:
-            name = nested_names.pop()
-            dtype = nested_dtypes.pop()
+            name = parent_names.pop()
+            dtype = parent_dtypes.pop()
 
             # generate the field
             if dtype == "list":
-                f = fields_of_lists.pop()
+                f = within_lists.pop()
                 # named list
                 if name:
                     field = (
@@ -254,16 +253,16 @@ def parse_schema(source: str) -> pl.Struct:
                 else:
                     field = pl.List(f.dtype) if hasattr(f, "dtype") else pl.List(f)
             else:
-                field = pl.Field(name, pl.Struct(fields_of_structs.pop()))
+                field = pl.Field(name, pl.Struct(within_structs.pop()))
 
             # add the nested field to the current object
-            if nested_dtypes:
-                if nested_dtypes[-1] == "list":
-                    fields_of_lists.append(field)
+            if parent_dtypes:
+                if parent_dtypes[-1] == "list":
+                    within_lists.append(field)
                 else:
-                    fields_of_structs[-1].append(field)
+                    within_structs[-1].append(field)
             else:
-                struct.append(field)
+                root_struct.append(field)
 
             schema = schema.replace(m.group(0), "", 1)
 
@@ -277,7 +276,7 @@ def parse_schema(source: str) -> pl.Struct:
             e = f"{schema[:50]}..."
             raise SchemaParsingError(e)
 
-    return pl.Struct(struct)
+    return pl.Struct(root_struct)
 
 
 def unpack_frame(
@@ -314,6 +313,7 @@ def unpack_frame(
         if dtype in (pl.Array, pl.List):
             df = unpack_frame(df.explode(column), dtype.inner, column)
         elif dtype == pl.Struct:
+            # TODO rename struct fields according to schema
             df = unpack_frame(df.unnest(column), dtype)
 
     # unpack nested children columns when encountered
@@ -326,6 +326,7 @@ def unpack_frame(
                     f.name,
                 )
             elif type(f.dtype) == pl.Struct:
+                # TODO rename struct fields according to schema
                 df = unpack_frame(
                     df.unnest(column if column is not None else f.name),
                     f.dtype,
@@ -354,7 +355,7 @@ def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
 
 
 def unpack_text(path_schema: str, path_data: str, delimiter: str = "|") -> pl.LazyFrame:
-    r"""Read (scan) and unpack a JSON file read a plain text, given a schema.
+    r"""Read (scan) and unpack a JSON file read as plain text, given a schema.
 
     Parameters
     ----------
