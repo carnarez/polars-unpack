@@ -11,7 +11,8 @@ The use case is as follows:
 A few extra points:
 
 * The schema should be dominant and we should rename fields as they are being unpacked
-  to avoid identical names for different columns (which is forbidden by `Polars`).
+  to avoid identical names for different columns (which is forbidden by `Polars` for
+  obvious reasons).
 * _Why not using the inferred schema?_ Because at times we need to provide fields that
   might _not_ be in the JSON file to fit a certain data structure, or simply ignore
   part of the JSON data when unpacking to avoid wasting resources. Oh, and to rename
@@ -22,6 +23,15 @@ The current ~~working~~ state of this little DIY can be checked (in `Docker`) vi
 ```shell
 $ make env
 > python unpack.py samples/complex.schema samples/complex.ndjson
+```
+
+Note that a call of the same script _without_ providing a schema returns a
+representation of the latter as _inferred_ by `Polars` (works as an example of the
+syntax used to describe things in plain text):
+
+```shell
+$ make env
+> python unpack.py samples/complex.ndjson
 ```
 
 A thorough(-ish) battery of tests can be performed (in `Docker`) via:
@@ -64,6 +74,7 @@ POLARS_DATATYPES: dict[str, pl.DataType] = {
 
 
 class SchemaParsingError(Exception):
+    # TODO tune this output
     """When unexpected content is encountered and cannot be parsed."""
 
 
@@ -85,7 +96,8 @@ def infer_schema(path_data: str) -> str:
     -----
     This is merely to test the output of the schema parser defined in this very script.
     """
-    # eww
+
+    # quick work
     def _pprint(field: str, dtype: pl.DataType, indent: str = "") -> str:
         """Recursively loop over the inferred schema and pretty print its structure.
 
@@ -105,14 +117,14 @@ def infer_schema(path_data: str) -> str:
         """
         schema = ""
 
-        # Struct
+        # nested datatype: Struct
         if hasattr(dtype, "fields"):
             schema += f"{indent}{field}{dtype.__class__.__name__}(\n"
             for f, d in dtype.to_schema().items():
                 schema += _pprint(f"{f}: ", d, f"{indent}    ")
             schema += f"{indent})\n"
 
-        # Array, List
+        # nested datatypes: Array, List
         elif hasattr(dtype, "inner"):
             schema += f"{indent}{field}{dtype.__class__.__name__}(\n"
             schema += _pprint("", dtype.inner, f"{indent}    ")
@@ -132,12 +144,12 @@ def infer_schema(path_data: str) -> str:
     return schema.strip()
 
 
-def parse_schema(schema: str) -> pl.Struct:
+def parse_schema(source: str) -> pl.Struct:
     """Parse a plain text JSON schema into a `Polars` `Struct`.
 
     Parameters
     ----------
-    schema : str
+    source : str
         Content of the plain text file describing the JSON schema.
 
     Returns
@@ -155,6 +167,8 @@ def parse_schema(schema: str) -> pl.Struct:
     A nested field may not have a name! To be kept in mind when unpacking using the
     `.explode()` and `.unnest()` methods.
     """
+    schema = source  # keep the initial source untouched for clear exception output
+
     struct: list = []  # highest level list of fields
 
     nested_names: list[str | None] = []  # names of nested objects
@@ -256,42 +270,50 @@ def unpack_frame(
     dtype: pl.DataType,
     column: str | None = None,
 ) -> pl.DataFrame | pl.LazyFrame:
-    """Flatten a [nested] JSON into a `Polars` `DataFrame` given a schema.
+    """Unpack a [nested] JSON into a `Polars` `DataFrame` or `LazyFrame` given a schema.
 
     Parameters
     ----------
     df : polars.DataFrame | polars.LazyFrame
         Current `Polars` `DataFrame` (or `LazyFrame`) object.
     dtype : polars.DataType
-        Datatype of the current object (`polars.List` or `polars.Struct`).
+        Datatype of the current object (`polars.Array`, `polars.List` or
+        `polars.Struct`).
     column : str | None
-        Column to apply the unpacking on. Defaults to `None`.
+        Column to apply the unpacking on; defaults to `None`. This is used when the
+        current object has children but no field name; this is the case for convoluted
+        `polars.List` within a `polars.List` for instance.
 
     Returns
     -------
     : polars.DataFrame | polars.LazyFrame
         Updated [unpacked] `Polars` `DataFrame` (or `LazyFrame`) object.
+
+    Notes
+    -----
+    The `polars.Array` is considered the [obsolete] ancestor of `polars.List` and
+    expected to behave identically.
     """
-    # if we are dealing with the nested column itself
+    # if we are dealing with a nesting column
     if column is not None:
-        if dtype == pl.List:
+        if dtype in (pl.Array, pl.List):
             df = unpack_frame(df.explode(column), dtype.inner, column)
         elif dtype == pl.Struct:
             df = unpack_frame(df.unnest(column), dtype)
 
     # unpack nested children columns when encountered
-    elif hasattr(dtype, "fields") and any(
-        d in (pl.List, pl.Struct) for d in [f.dtype for f in dtype.fields]
-    ):
+    elif hasattr(dtype, "fields"):
         for f in dtype.fields:
-            if type(f.dtype) == pl.List:
+            if type(f.dtype) in (pl.Array, pl.List):
                 df = unpack_frame(
-                    df.explode(column if column else f.name),
+                    df.explode(column if column is not None else f.name),
                     f.dtype.inner,
                     f.name,
                 )
             elif type(f.dtype) == pl.Struct:
-                df = unpack_frame(df.unnest(column if column else f.name), f.dtype)
+                df = unpack_frame(
+                    df.unnest(column if column is not None else f.name), f.dtype,
+                )
 
     return df
 

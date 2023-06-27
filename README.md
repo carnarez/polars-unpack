@@ -13,7 +13,8 @@ The use case is as follows:
 A few extra points:
 
 - The schema should be dominant and we should rename fields as they are being unpacked
-  to avoid identical names for different columns (which is forbidden by `Polars`).
+  to avoid identical names for different columns (which is forbidden by `Polars` for
+  obvious reasons).
 - _Why not using the inferred schema?_ Because at times we need to provide fields that
   might _not_ be in the JSON file to fit a certain data structure, or simply ignore part
   of the JSON data when unpacking to avoid wasting resources. Oh, and to rename fields
@@ -24,6 +25,15 @@ The current ~~working~~ state of this little DIY can be checked (in `Docker`) vi
 ```shell
 $ make env
 > python unpack.py samples/complex.schema samples/complex.ndjson
+```
+
+Note that a call of the same script _without_ providing a schema returns a
+representation of the latter as _inferred_ by `Polars` (works as an example of the
+syntax used to describe things in plain text):
+
+```shell
+$ make env
+> python unpack.py samples/complex.ndjson
 ```
 
 A thorough(-ish) battery of tests can be performed (in `Docker`) via:
@@ -45,8 +55,8 @@ Feel free to extend the functionalities to your own use case.
   `Polars`-inferred schema in plain text.
 - [`parse_schema()`](#unpackparse_schema): Parse a plain text JSON schema into a
   `Polars` `Struct`.
-- [`unpack_frame()`](#unpackunpack_frame): Flatten a \[nested\] JSON into a `Polars`
-  `DataFrame` given a schema.
+- [`unpack_frame()`](#unpackunpack_frame): Unpack a \[nested\] JSON into a `Polars`
+  `DataFrame` or `LazyFrame` given a schema.
 - [`unpack_ndjson()`](#unpackunpack_ndjson): Read (scan) and unpack a newline-delimited
   JSON file given a schema.
 - [`unpack_text()`](#unpackunpack_text): Read (scan) and unpack a JSON file read a plain
@@ -83,14 +93,14 @@ This is merely to test the output of the schema parser defined in this very scri
 ### `unpack.parse_schema`
 
 ```python
-parse_schema(schema: str) -> pl.Struct:
+parse_schema(source: str) -> pl.Struct:
 ```
 
 Parse a plain text JSON schema into a `Polars` `Struct`.
 
 **Parameters**
 
-- `schema` \[`str`\]: Content of the plain text file describing the JSON schema.
+- `source` \[`str`\]: Content of the plain text file describing the JSON schema.
 
 **Returns**
 
@@ -115,20 +125,27 @@ unpack_frame(
 ) -> pl.DataFrame | pl.LazyFrame:
 ```
 
-Flatten a \[nested\] JSON into a `Polars` `DataFrame` given a schema.
+Unpack a \[nested\] JSON into a `Polars` `DataFrame` or `LazyFrame` given a schema.
 
 **Parameters**
 
 - `df` \[`polars.DataFrame | polars.LazyFrame`\]: Current `Polars` `DataFrame` (or
   `LazyFrame`) object.
-- `dtype` \[`polars.DataType`\]: Datatype of the current object (`polars.List` or
-  `polars.Struct`).
-- `column` \[`str | None`\]: Column to apply the unpacking on. Defaults to `None`.
+- `dtype` \[`polars.DataType`\]: Datatype of the current object (`polars.Array`,
+  `polars.List` or `polars.Struct`).
+- `column` \[`str | None`\]: Column to apply the unpacking on; defaults to `None`. This
+  is used when the current object has children but no field name; this is the case for
+  convoluted `polars.List` within a `polars.List` for instance.
 
 **Returns**
 
 - \[`polars.DataFrame | polars.LazyFrame`\]: Updated \[unpacked\] `Polars` `DataFrame`
   (or `LazyFrame`) object.
+
+**Notes**
+
+The `polars.Array` is considered the \[obsolete\] ancestor of `polars.List` and expected
+to behave identically.
 
 ### `unpack.unpack_ndjson`
 
