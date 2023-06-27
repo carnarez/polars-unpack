@@ -19,11 +19,8 @@ A few extra points:
   might _not_ be in the JSON file to fit a certain data structure, or simply ignore part
   of the JSON data when unpacking to avoid wasting resources. Oh, and to rename fields
   too.
-
-Limitations encountered so far:
-
 - It seems `Polars` only accepts input starting with `{`, but not `[` (such as a JSON
-  list); although valid in a JSON sense...
+  list); although it _is_ valid in a JSON sense...
 
 The current ~~working~~ state of this little DIY can be checked (in `Docker`) via:
 
@@ -56,16 +53,16 @@ Feel free to extend the functionalities to your own use case.
 
 **Functions**
 
-- [`infer_schema()`](#unpackinfer_schema): Lazily scan JSON data and output the
-  `Polars`-inferred schema in plain text.
+- [`infer_schema()`](#unpackinfer_schema): Lazily scan newline-delimited JSON data and
+  print the `Polars`-inferred schema.
 - [`parse_schema()`](#unpackparse_schema): Parse a plain text JSON schema into a
   `Polars` `Struct`.
 - [`unpack_frame()`](#unpackunpack_frame): Unpack a \[nested\] JSON into a `Polars`
   `DataFrame` or `LazyFrame` given a schema.
-- [`unpack_ndjson()`](#unpackunpack_ndjson): Read (scan) and unpack a newline-delimited
-  JSON file given a schema.
-- [`unpack_text()`](#unpackunpack_text): Read (scan) and unpack a JSON file read as
-  plain text, given a schema.
+- [`unpack_ndjson()`](#unpackunpack_ndjson): Lazily scan and unpack newline-delimited
+  JSON file given a `Polars` schema.
+- [`unpack_text()`](#unpackunpack_text): Lazily scan and unpack JSON data read as plain
+  text, given a `Polars` schema.
 
 **Classes**
 
@@ -80,7 +77,28 @@ Feel free to extend the functionalities to your own use case.
 infer_schema(path_data: str) -> str:
 ```
 
-Lazily scan JSON data and output the `Polars`-inferred schema in plain text.
+Lazily scan newline-delimited JSON data and print the `Polars`-inferred schema.
+
+We expect the following example JSON:
+
+```json
+{ "attribute": "test", "nested": { "foo": 1.23, "bar": -8, "vector": [ 0, 1, 2 ] } }
+```
+
+to translate into the given `Polars` schema:
+
+```
+attribute: Utf8
+nested: Struct(
+    foo: Float32
+    bar: Int16
+    vector: List(UInt8)
+)
+```
+
+Although this merely started as a test for the output of the schema parser defined
+somewhere below in this very script, it became quite useful to get a head start when
+writing a schema by hand.
 
 **Parameters**
 
@@ -91,10 +109,6 @@ Lazily scan JSON data and output the `Polars`-inferred schema in plain text.
 
 - \[`str`\]: Pretty-printed `Polars` JSON schema.
 
-**Notes**
-
-This is merely to test the output of the schema parser defined in this very script.
-
 ### `unpack.parse_schema`
 
 ```python
@@ -102,6 +116,46 @@ parse_schema(schema: str) -> pl.Struct:
 ```
 
 Parse a plain text JSON schema into a `Polars` `Struct`.
+
+We expect something as follows:
+
+```
+attribute: Utf8
+nested: Struct(
+    foo: Float32
+    bar: Int16
+    vector: List[UInt8]
+)
+```
+
+to translate into a `Polars` native `Struct` object:
+
+```python
+polars.Struct([
+    polars.Field("attribute", polars.Utf8),
+    polars.Struct([
+        polars.Field("foo", polars.Float32),
+        polars.Field("bar", polars.Int16),
+        polars.Field("vector", polars.List(polars.Uint8))
+    ])
+])
+```
+
+The following patterns (recognised via regular expressions) are supported:
+
+- `([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)` for an attribute name, a column (`:`) and a
+  datatype; for instance `attribute: Utf8` in the example above. Attribute name and
+  datatype must not have spaces and only include alphanumerical or underscore (`_`)
+  characters.
+- `([A-Za-z0-9_]+)` for a lone datatype; for instance the inner content of the `List()`
+  in the example above. Keep in mind this datatype could be a complex structure as much
+  as a canonical datatype.
+- `[(\[{<]` and its `[)\]}>]` counterpart for opening and closing of nested datatypes.
+  Any of these characters can be used to open or close nested structures; mixing also
+  allowed, for the better or the worse.
+
+Indentation and commas are ignored. The source is parsed until end-of-file or a
+`SchemaParsingError` exception is raised.
 
 **Parameters**
 
@@ -114,11 +168,6 @@ Parse a plain text JSON schema into a `Polars` `Struct`.
 **Raises**
 
 - \[`SchemaParsingError`\]: When unexpected content is encountered and cannot be parsed.
-
-**Notes**
-
-A nested field may not have a name! To be kept in mind when unpacking using the
-`.explode()` and `.unnest()` methods.
 
 ### `unpack.unpack_frame`
 
@@ -158,7 +207,7 @@ to behave identically.
 unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
 ```
 
-Read (scan) and unpack a newline-delimited JSON file given a schema.
+Lazily scan and unpack newline-delimited JSON file given a `Polars` schema.
 
 **Parameters**
 
@@ -175,7 +224,7 @@ Read (scan) and unpack a newline-delimited JSON file given a schema.
 unpack_text(path_schema: str, path_data: str, delimiter: str = "|") -> pl.LazyFrame:
 ```
 
-Read (scan) and unpack a JSON file read as plain text, given a schema.
+Lazily scan and unpack JSON data read as plain text, given a `Polars` schema.
 
 **Parameters**
 
