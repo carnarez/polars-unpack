@@ -55,6 +55,7 @@ import sys
 import polars as pl
 
 POLARS_DATATYPES: dict[str, pl.DataType] = {
+    "array": pl.List,
     "list": pl.List,
     "struct": pl.Struct,
     "float32": pl.Float32,
@@ -63,6 +64,10 @@ POLARS_DATATYPES: dict[str, pl.DataType] = {
     "int16": pl.Int16,
     "int32": pl.Int32,
     "int64": pl.Int64,
+    "uint8": pl.UInt8,
+    "uint16": pl.UInt16,
+    "uint32": pl.UInt32,
+    "uint64": pl.UInt64,
     "utf8": pl.Utf8,
     # shorthands
     "float": pl.Float64,
