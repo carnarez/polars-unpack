@@ -460,14 +460,14 @@ class SchemaParser:
 
         The following patterns (recognised via regular expressions) are supported:
 
-        * `([A-Za-z0-9_]+)\\s*:\\s*([A-Za-z0-9_]+)` for an attribute name, a column
-          (`:`) and a datatype; for instance `attribute: Utf8` in the example above.
-          Attribute name and datatype must not have spaces and only include
-          alphanumerical or underscore (`_`) characters.
+        * `([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)` for an attribute name, a column (`:`)
+          and a datatype; for instance `attribute: Utf8` in the example above. Attribute
+          name and datatype must not have spaces and only include alphanumerical or
+          underscore (`_`) characters.
         * `([A-Za-z0-9_]+)` for a lone datatype; for instance the inner content of the
           `List()` in the example above. Keep in mind this datatype could be a complex
           structure as much as a canonical datatype.
-        * `[(\\[{<]` and its `[)\\]}>]` counterpart for opening and closing of nested
+        * `[(\[{<]` and its `[)\]}>]` counterpart for opening and closing of nested
           datatypes. Any of these characters can be used to open or close nested
           structures; mixing also allowed, for the better or the worse.
 
