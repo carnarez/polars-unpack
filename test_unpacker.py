@@ -7,8 +7,11 @@ import polars as pl
 
 from unpack import parse_schema, unpack_frame
 
+# TODO test extra/missing fields in the schema
+# TODO test Struct-to-Utf8 casting (to keep a json column as is)
 
-def test_standalone_datatype() -> None:
+
+def test_datatype() -> None:
     """Test a standalone datatype.
 
     Test the following JSON content:
@@ -36,7 +39,7 @@ def test_standalone_datatype() -> None:
     assert unpack_frame(df, dtype).frame_equal(df)
 
 
-def test_simple_list() -> None:
+def test_list() -> None:
     """Test a simple `polars.List` containing a standalone datatype.
 
     Test the following nested JSON content:
@@ -230,198 +233,6 @@ def test_list_nested_in_struct() -> None:
     )
 
 
-def test_struct_nested_in_list() -> None:
-    """Test a `polars.Struct` nested in a `polars.List`.
-
-    Test the following nested JSON content:
-
-    ```json
-    {
-        "text": "foobar",
-        "json": [
-            {
-                "foo": 0,
-                "bar": 1
-            },
-            {
-                "foo": 2,
-                "bar": 3
-            }
-        ]
-    }
-    ```
-
-    as described by the following schema:
-
-    ```
-    text: Utf8,
-    json: List(
-        Struct(
-            foo: Int64,
-            bar: Int64
-        )
-    )
-    ```
-    """
-    dtype = pl.Struct(
-        [
-            pl.Field("text", pl.Utf8),
-            pl.Field(
-                "json",
-                pl.List(
-                    pl.Struct([pl.Field("foo", pl.Int64), pl.Field("bar", pl.Int64)]),
-                ),
-            ),
-        ],
-    )
-
-    df = pl.DataFrame(
-        {
-            "text": "foobar",
-            "json": json.loads('[[{"foo": 0, "bar": 1}, {"foo": 2, "bar": 3}]]'),
-        },
-        dtype,
-    )
-
-    assert parse_schema("text:Utf8,json:List(Struct(foo:Int64,bar:Int64))") == dtype
-    assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(df.explode("json").unnest("json"))
-
-
-def test_simple_struct() -> None:
-    """Test a simple `polars.Struct` containing a few fields.
-
-    Test the following nested JSON content:
-
-    ```json
-    {
-        "text": "foobar",
-        "json": {
-            "foo": 0,
-            "bar": 1
-        }
-    }
-    ```
-
-    as described by the following schema:
-
-    ```
-    text: Utf8,
-    json: Struct(
-        foo: Int64,
-        bar: Int64
-    )
-    ```
-    """
-    dtype = pl.Struct(
-        [
-            pl.Field("text", pl.Utf8),
-            pl.Field(
-                "json",
-                pl.Struct([pl.Field("foo", pl.Int64), pl.Field("bar", pl.Int64)]),
-            ),
-        ],
-    )
-
-    df = pl.DataFrame(
-        {
-            "text": ["foobar"],
-            "json": [json.loads('{"foo": 0, "bar": 1}')],
-        },
-        dtype,
-    )
-
-    assert parse_schema("text:Utf8,json:Struct(foo:Int64,bar:Int64)") == dtype
-    assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(df.unnest("json"))
-
-
-def test_struct_nested_in_struct() -> None:
-    """Test a `polars.Struct` nested within another `polars.Struct`.
-
-    Test the following nested JSON content:
-
-    ```json
-    {
-        "text": "foobar",
-        "json": {
-            "foo": {
-                "fox": 0,
-                "foz": 2
-            },
-            "bar": {
-                "bax": 1,
-                "baz": 3
-            }
-        }
-    }
-    ```
-
-    as described by the following schema:
-
-    ```
-    text: Utf8,
-    json: Struct(
-        foo: Struct(
-            fox: Int64,
-            foz: Int64
-        ),
-        bar: Struct(
-            bax: Int64,
-            baz: Int64
-        )
-    )
-    ```
-    """
-    # yup, this is why we want this to be generated
-    dtype = pl.Struct(
-        [
-            pl.Field("text", pl.Utf8),
-            pl.Field(
-                "json",
-                pl.Struct(
-                    [
-                        pl.Field(
-                            "foo",
-                            pl.Struct(
-                                [pl.Field("fox", pl.Int64), pl.Field("foz", pl.Int64)],
-                            ),
-                        ),
-                        pl.Field(
-                            "bar",
-                            pl.Struct(
-                                [pl.Field("bax", pl.Int64), pl.Field("baz", pl.Int64)],
-                            ),
-                        ),
-                    ],
-                ),
-            ),
-        ],
-    )
-
-    df = pl.DataFrame(
-        {
-            "text": ["foobar"],
-            "json": [
-                json.loads(
-                    '{"foo": {"fox": 0, "foz": 2}, "bar": {"bax": 1, "baz": 3}}',
-                ),
-            ],
-        },
-        dtype,
-    )
-
-    assert (
-        parse_schema(
-            "text:Utf8,"
-            "json:Struct(foo:Struct(fox:Int64,foz:Int64),bar:Struct(bax:Int64,baz:Int64))",
-        )
-        == dtype
-    )
-    assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(df.unnest("json").unnest("foo", "bar"))
-
-
 def test_real_life() -> None:
     """Test complex real life-like parsing and flattening.
 
@@ -592,3 +403,281 @@ def test_real_life() -> None:
 
     assert df_ndjson.dtypes == df_csv.dtypes
     assert df_ndjson.frame_equal(df_csv)
+
+
+def test_rename_fields() -> None:
+    """Test for `polars.Struct` field renaming according to provided schema.
+
+    Test the following nested JSON content:
+
+    ```json
+    {
+        "text": "foobar",
+        "json": {
+            "foo": 0,
+            "bar": 1
+        }
+    }
+    ```
+
+    as described by the following schema:
+
+    ```
+    string: Utf8,
+    struct: Struct(
+        fox: Int64,
+        bax: Int64
+    )
+    ```
+
+    which should return:
+
+    ```
+    ┌────────┬─────┬─────┐
+    │ string ┆ fox ┆ bax │
+    │ ---    ┆ --- ┆ --- │
+    │ str    ┆ i64 ┆ i64 │
+    ╞════════╪═════╪═════╡
+    │ foobar ┆ 0   ┆ 1   │
+    └────────┴─────┴─────┘
+    ```
+    """
+    # original dataframe
+    dtype = pl.Struct(
+        [
+            pl.Field("text", pl.Utf8),
+            pl.Field(
+                "json",
+                pl.Struct([pl.Field("foo", pl.Int64), pl.Field("bar", pl.Int64)]),
+            ),
+        ],
+    )
+
+    df = pl.DataFrame(
+        {
+            "text": ["foobar"],
+            "json": [json.loads('{"foo": 0, "bar": 1}')],
+        },
+        dtype,
+    )
+
+    # renamed dataframe
+    dtype_renamed = pl.Struct(
+        [
+            pl.Field("string", pl.Utf8),
+            pl.Field(
+                "struct",
+                pl.Struct([pl.Field("fox", pl.Int64), pl.Field("bax", pl.Int64)]),
+            ),
+        ],
+    )
+
+    df_renamed = pl.DataFrame(
+        {
+            "string": ["foobar"],
+            "struct": [json.loads('{"fox": 0, "bax": 1}')],
+        },
+        dtype,
+    )
+
+    # already tested somewhere but hey, won't hurt
+    assert parse_schema("text:Utf8,json:Struct(foo:Int64,bar:Int64)") == dtype
+    assert dtype.to_schema() == df.schema
+    assert unpack_frame(df, dtype).frame_equal(df_renamed.unnest("struct"))
+
+    # test field renaming according to provided schema
+    assert parse_schema("string:Utf8,struct:Struct(fox:Int64,bax:Int64)") == dtype_renamed
+    assert dtype_renamed.to_schema() == df_renamed.schema
+    assert unpack_frame(df_renamed, dtype_renamed).frame_equal(df_renamed.unnest("struct"))
+
+
+def test_struct() -> None:
+    """Test a simple `polars.Struct` containing a few fields.
+
+    Test the following nested JSON content:
+
+    ```json
+    {
+        "text": "foobar",
+        "json": {
+            "foo": 0,
+            "bar": 1
+        }
+    }
+    ```
+
+    as described by the following schema:
+
+    ```
+    text: Utf8,
+    json: Struct(
+        foo: Int64,
+        bar: Int64
+    )
+    ```
+    """
+    dtype = pl.Struct(
+        [
+            pl.Field("text", pl.Utf8),
+            pl.Field(
+                "json",
+                pl.Struct([pl.Field("foo", pl.Int64), pl.Field("bar", pl.Int64)]),
+            ),
+        ],
+    )
+
+    df = pl.DataFrame(
+        {
+            "text": ["foobar"],
+            "json": [json.loads('{"foo": 0, "bar": 1}')],
+        },
+        dtype,
+    )
+
+    assert parse_schema("text:Utf8,json:Struct(foo:Int64,bar:Int64)") == dtype
+    assert dtype.to_schema() == df.schema
+    assert unpack_frame(df, dtype).frame_equal(df.unnest("json"))
+
+
+def test_struct_nested_in_list() -> None:
+    """Test a `polars.Struct` nested in a `polars.List`.
+
+    Test the following nested JSON content:
+
+    ```json
+    {
+        "text": "foobar",
+        "json": [
+            {
+                "foo": 0,
+                "bar": 1
+            },
+            {
+                "foo": 2,
+                "bar": 3
+            }
+        ]
+    }
+    ```
+
+    as described by the following schema:
+
+    ```
+    text: Utf8,
+    json: List(
+        Struct(
+            foo: Int64,
+            bar: Int64
+        )
+    )
+    ```
+    """
+    dtype = pl.Struct(
+        [
+            pl.Field("text", pl.Utf8),
+            pl.Field(
+                "json",
+                pl.List(
+                    pl.Struct([pl.Field("foo", pl.Int64), pl.Field("bar", pl.Int64)]),
+                ),
+            ),
+        ],
+    )
+
+    df = pl.DataFrame(
+        {
+            "text": "foobar",
+            "json": json.loads('[[{"foo": 0, "bar": 1}, {"foo": 2, "bar": 3}]]'),
+        },
+        dtype,
+    )
+
+    assert parse_schema("text:Utf8,json:List(Struct(foo:Int64,bar:Int64))") == dtype
+    assert dtype.to_schema() == df.schema
+    assert unpack_frame(df, dtype).frame_equal(df.explode("json").unnest("json"))
+
+
+def test_struct_nested_in_struct() -> None:
+    """Test a `polars.Struct` nested within another `polars.Struct`.
+
+    Test the following nested JSON content:
+
+    ```json
+    {
+        "text": "foobar",
+        "json": {
+            "foo": {
+                "fox": 0,
+                "foz": 2
+            },
+            "bar": {
+                "bax": 1,
+                "baz": 3
+            }
+        }
+    }
+    ```
+
+    as described by the following schema:
+
+    ```
+    text: Utf8,
+    json: Struct(
+        foo: Struct(
+            fox: Int64,
+            foz: Int64
+        ),
+        bar: Struct(
+            bax: Int64,
+            baz: Int64
+        )
+    )
+    ```
+    """
+    # yup, this is why we want this to be generated
+    dtype = pl.Struct(
+        [
+            pl.Field("text", pl.Utf8),
+            pl.Field(
+                "json",
+                pl.Struct(
+                    [
+                        pl.Field(
+                            "foo",
+                            pl.Struct(
+                                [pl.Field("fox", pl.Int64), pl.Field("foz", pl.Int64)],
+                            ),
+                        ),
+                        pl.Field(
+                            "bar",
+                            pl.Struct(
+                                [pl.Field("bax", pl.Int64), pl.Field("baz", pl.Int64)],
+                            ),
+                        ),
+                    ],
+                ),
+            ),
+        ],
+    )
+
+    df = pl.DataFrame(
+        {
+            "text": ["foobar"],
+            "json": [
+                json.loads(
+                    '{"foo": {"fox": 0, "foz": 2}, "bar": {"bax": 1, "baz": 3}}',
+                ),
+            ],
+        },
+        dtype,
+    )
+
+    assert (
+        parse_schema(
+            "text:Utf8,"
+            "json:Struct(foo:Struct(fox:Int64,foz:Int64),bar:Struct(bax:Int64,baz:Int64))",
+        )
+        == dtype
+    )
+    assert dtype.to_schema() == df.schema
+    assert unpack_frame(df, dtype).frame_equal(df.unnest("json").unnest("foo", "bar"))

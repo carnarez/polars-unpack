@@ -8,18 +8,6 @@ import pytest
 from unpack import POLARS_DATATYPES, SchemaParsingError, infer_schema, parse_schema
 
 
-def test_pretty_printing() -> None:
-    """Test whether an inferred schema is correctly printed."""
-    with pathlib.Path("samples/nested-list.schema").open() as f:
-        assert infer_schema("samples/nested-list.ndjson") == f.read().strip()
-
-
-def test_unexpected_syntax() -> None:
-    """Test for failure to parse the schema due to unknown/unexpected syntax."""
-    with pytest.raises(SchemaParsingError):
-        parse_schema("!@#$%^&*")
-
-
 @pytest.mark.parametrize(
     ("text", "struct"),
     [
@@ -28,7 +16,7 @@ def test_unexpected_syntax() -> None:
         if text not in ("list", "struct")
     ],
 )
-def test_simple_datatypes(text: str, struct: pl.Struct) -> None:
+def test_datatype(text: str, struct: pl.Struct) -> None:
     """Test all supported standalone non-nesting datatypes and associated shorthands.
 
     Parameters
@@ -61,7 +49,7 @@ def test_simple_datatypes(text: str, struct: pl.Struct) -> None:
         ),
     ],
 )
-def test_simple_nested_datatypes(text: str, struct: pl.Struct) -> None:
+def test_datatype_nested(text: str, struct: pl.Struct) -> None:
     """Test nesting datatypes.
 
     Parameters
@@ -99,7 +87,7 @@ def test_simple_nested_datatypes(text: str, struct: pl.Struct) -> None:
         ),
     ],
 )
-def test_delimiters(text: str, struct: pl.Struct) -> None:
+def test_delimiter(text: str, struct: pl.Struct) -> None:
     """Test nested structure delimiters: `()`, `[]`, `{}` or `<>`.
 
     Parameters
@@ -142,56 +130,10 @@ def test_list_nested_in_struct() -> None:
     assert parse_schema("Struct(foo: List(Int8))") == struct
 
 
-def test_struct_nested_in_list() -> None:
-    """Test the parsing of a `polars.Struct` within a `polars.List`.
-
-    Test the generation of the following schema:
-
-    ```
-    List(
-        Struct(
-            foo: Int8,
-            bar: Int8
-        )
-    )
-    ```
-
-    Notes
-    -----
-    It seems `Polars` only accepts input starting with `{`, but not `[` (such as a JSON
-    lists); although the schema described above is valid in a JSON sense, the associated
-    data will not be ingested by `Polars`.
-    """
-    struct = pl.Struct(
-        [pl.List(pl.Struct([pl.Field("foo", pl.Int8), pl.Field("bar", pl.Int8)]))],
-    )
-
-    assert parse_schema("List(Struct(foo: Int8, bar: Int8))") == struct
-
-
-def test_struct_nested_in_struct() -> None:
-    """Test the parsing of a `polars.Struct` within a `polars.Struct`.
-
-    Test the generation of the following schema:
-
-    ```
-    Struct(
-        foo: Struct(
-            bar: Int8
-        )
-    )
-    ```
-    """
-    struct = pl.Struct(
-        [
-            pl.Field(
-                "",
-                pl.Struct([pl.Field("foo", pl.Struct([pl.Field("bar", pl.Int8)]))]),
-            ),
-        ],
-    )
-
-    assert parse_schema("Struct(foo: Struct(bar: Int8))") == struct
+def test_pretty_printing() -> None:
+    """Test whether an inferred schema is correctly printed."""
+    with pathlib.Path("samples/nested-list.schema").open() as f:
+        assert infer_schema("samples/nested-list.ndjson") == f.read().strip()
 
 
 def test_real_life() -> None:
@@ -328,3 +270,61 @@ def test_real_life() -> None:
         df = pl.scan_ndjson(p).collect()
 
     assert dtype.to_schema() == df.schema
+
+
+def test_struct_nested_in_list() -> None:
+    """Test the parsing of a `polars.Struct` within a `polars.List`.
+
+    Test the generation of the following schema:
+
+    ```
+    List(
+        Struct(
+            foo: Int8,
+            bar: Int8
+        )
+    )
+    ```
+
+    Notes
+    -----
+    It seems `Polars` only accepts input starting with `{`, but not `[` (such as a JSON
+    lists); although the schema described above is valid in a JSON sense, the associated
+    data will not be ingested by `Polars`.
+    """
+    struct = pl.Struct(
+        [pl.List(pl.Struct([pl.Field("foo", pl.Int8), pl.Field("bar", pl.Int8)]))],
+    )
+
+    assert parse_schema("List(Struct(foo: Int8, bar: Int8))") == struct
+
+
+def test_struct_nested_in_struct() -> None:
+    """Test the parsing of a `polars.Struct` within a `polars.Struct`.
+
+    Test the generation of the following schema:
+
+    ```
+    Struct(
+        foo: Struct(
+            bar: Int8
+        )
+    )
+    ```
+    """
+    struct = pl.Struct(
+        [
+            pl.Field(
+                "",
+                pl.Struct([pl.Field("foo", pl.Struct([pl.Field("bar", pl.Int8)]))]),
+            ),
+        ],
+    )
+
+    assert parse_schema("Struct(foo: Struct(bar: Int8))") == struct
+
+
+def test_unexpected_syntax() -> None:
+    """Test for failure to parse the schema due to unknown/unexpected syntax."""
+    with pytest.raises(SchemaParsingError):
+        parse_schema("!@#$%^&*")

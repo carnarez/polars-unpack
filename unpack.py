@@ -328,6 +328,7 @@ def parse_schema(schema: str) -> pl.Struct:
     return pl.Struct(root_struct)
 
 
+# TODO rename fields according to schema
 def unpack_frame(
     df: pl.DataFrame | pl.LazyFrame,
     dtype: pl.DataType,
@@ -362,7 +363,6 @@ def unpack_frame(
         if dtype in (pl.Array, pl.List):
             df = unpack_frame(df.explode(column), dtype.inner, column)
         elif dtype == pl.Struct:
-            # TODO rename struct fields according to schema
             df = unpack_frame(df.unnest(column), dtype)
 
     # unpack nested children columns when encountered
@@ -375,7 +375,6 @@ def unpack_frame(
                     f.name,
                 )
             elif type(f.dtype) == pl.Struct:
-                # TODO rename struct fields according to schema
                 df = unpack_frame(
                     df.unnest(column if column is not None else f.name),
                     f.dtype,
