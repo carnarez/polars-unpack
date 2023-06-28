@@ -212,14 +212,14 @@ Parse a plain text JSON schema into a `Polars` `Struct`.
 
 **Methods**
 
-- [`parse_closing_delimiter()`](#unpackschemaparserparse_closing_delimiter): Parse and
-  register the closing of a nested structure.
-- [`parse_opening_delimiter()`](#unpackschemaparserparse_opening_delimiter): Parse and
-  register the opening of a nested structure.
-- [`parse_lone_dtype()`](#unpackschemaparserparse_lone_dtype): Parse and register a
-  standalone datatype (found within a list for instance).
 - [`parse_attr_dtype()`](#unpackschemaparserparse_attr_dtype): Parse and register an
   attribute and its associated datatype.
+- [`parse_lone_dtype()`](#unpackschemaparserparse_lone_dtype): Parse and register a
+  standalone datatype (found within a list for instance).
+- [`parse_opening_delimiter()`](#unpackschemaparserparse_opening_delimiter): Parse and
+  register the opening of a nested structure.
+- [`parse_closing_delimiter()`](#unpackschemaparserparse_closing_delimiter): Parse and
+  register the closing of a nested structure.
 - [`to_struct()`](#unpackschemaparserto_struct): Parse the plain text schema into a
   `Polars` `Struct`.
 
@@ -243,29 +243,23 @@ Instantiate the object.
 
 #### Methods
 
-##### `unpack.SchemaParser.parse_closing_delimiter`
+##### `unpack.SchemaParser.parse_attr_dtype`
 
 ```python
-parse_closing_delimiter(struct: pl.Struct) -> pl.Struct:
+parse_attr_dtype(struct: pl.Struct, name: str, dtype: str) -> pl.Struct:
 ```
 
-Parse and register the closing of a nested structure.
+Parse and register an attribute and its associated datatype.
 
 **Parameters**
 
 - `struct` \[`polars.Struct`\]: Current state of the `Polars` `Struct`.
+- `name` \[`str`\]: New attribute name.
+- `dtype` \[`str`\]: Expected `Polars` datatype for this attribute.
 
 **Returns**
 
 - \[`polars.Struct`\]: Updated `Polars` `Struct` including the latest parsed addition.
-
-##### `unpack.SchemaParser.parse_opening_delimiter`
-
-```python
-parse_opening_delimiter() -> None:
-```
-
-Parse and register the opening of a nested structure.
 
 ##### `unpack.SchemaParser.parse_lone_dtype`
 
@@ -284,19 +278,25 @@ Parse and register a standalone datatype (found within a list for instance).
 
 - \[`polars.Struct`\]: Updated `Polars` `Struct` including the latest parsed addition.
 
-##### `unpack.SchemaParser.parse_attr_dtype`
+##### `unpack.SchemaParser.parse_opening_delimiter`
 
 ```python
-parse_attr_dtype(struct: pl.Struct, name: str, dtype: str) -> pl.Struct:
+parse_opening_delimiter() -> None:
 ```
 
-Parse and register an attribute and its associated datatype.
+Parse and register the opening of a nested structure.
+
+##### `unpack.SchemaParser.parse_closing_delimiter`
+
+```python
+parse_closing_delimiter(struct: pl.Struct) -> pl.Struct:
+```
+
+Parse and register the closing of a nested structure.
 
 **Parameters**
 
 - `struct` \[`polars.Struct`\]: Current state of the `Polars` `Struct`.
-- `name` \[`str`\]: New attribute name.
-- `dtype` \[`str`\]: Expected `Polars` datatype for this attribute.
 
 **Returns**
 

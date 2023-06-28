@@ -320,6 +320,68 @@ class SchemaParser:
         """
         self.source = source
 
+    def parse_attr_dtype(self, struct: pl.Struct, name: str, dtype: str) -> pl.Struct:
+        """Parse and register an attribute and its associated datatype.
+
+        Parameters
+        ----------
+        struct : polars.Struct
+            Current state of the `Polars` `Struct`.
+        name : str
+            New attribute name.
+        dtype : str
+            Expected `Polars` datatype for this attribute.
+
+        Returns
+        -------
+        : polars.Struct
+            Updated `Polars` `Struct` including the latest parsed addition.
+        """
+        field = pl.Field(name, POLARS_DATATYPES[dtype])
+
+        # keep track of the nested object encountered, or if non-nested add it to the
+        # the current nested object, or the root struct
+        if dtype in ("list", "struct"):
+            self.record["parents"].append((name, dtype))
+        elif self.record["parents"]:
+            self.record["structs"][-1].append(field)
+        else:
+            struct.append(field)
+
+        return struct
+
+    def parse_lone_dtype(self, struct: pl.Struct, dtype: str) -> pl.Struct:
+        """Parse and register a standalone datatype (found within a list for instance).
+
+        Parameters
+        ----------
+        struct : polars.Struct
+            Current state of the `Polars` `Struct`.
+        dtype : str
+            Expected `Polars` datatype.
+
+        Returns
+        -------
+        : polars.Struct
+            Updated `Polars` `Struct` including the latest parsed addition.
+        """
+        # keep track of the nested object encountered, or if non-nested add it to the
+        # the current nested object, or the root struct
+        if dtype in ("list", "struct"):
+            self.record["parents"].append(("", dtype))
+        elif self.record["parents"]:
+            self.record["lists"].append(POLARS_DATATYPES[dtype])
+        else:
+            struct.append(pl.Field("", POLARS_DATATYPES[dtype]))
+
+        return struct
+
+    def parse_opening_delimiter(self) -> None:
+        """Parse and register the opening of a nested structure."""
+        # create a new list to register new fields
+        if self.record["parents"][-1][1] == "struct":
+            self.record["structs"].append([])
+
     def parse_closing_delimiter(self, struct: pl.Struct) -> pl.Struct:
         """Parse and register the closing of a nested structure.
 
@@ -353,68 +415,6 @@ class SchemaParser:
                 self.record["lists"].append(field)
             else:
                 self.record["structs"][-1].append(field)
-        else:
-            struct.append(field)
-
-        return struct
-
-    def parse_opening_delimiter(self) -> None:
-        """Parse and register the opening of a nested structure."""
-        # create a new list to register new fields
-        if self.record["parents"][-1][1] == "struct":
-            self.record["structs"].append([])
-
-    def parse_lone_dtype(self, struct: pl.Struct, dtype: str) -> pl.Struct:
-        """Parse and register a standalone datatype (found within a list for instance).
-
-        Parameters
-        ----------
-        struct : polars.Struct
-            Current state of the `Polars` `Struct`.
-        dtype : str
-            Expected `Polars` datatype.
-
-        Returns
-        -------
-        : polars.Struct
-            Updated `Polars` `Struct` including the latest parsed addition.
-        """
-        # keep track of the nested object encountered, or if non-nested add it to the
-        # the current nested object, or the root struct
-        if dtype in ("list", "struct"):
-            self.record["parents"].append(("", dtype))
-        elif self.record["parents"]:
-            self.record["lists"].append(POLARS_DATATYPES[dtype])
-        else:
-            struct.append(pl.Field("", POLARS_DATATYPES[dtype]))
-
-        return struct
-
-    def parse_attr_dtype(self, struct: pl.Struct, name: str, dtype: str) -> pl.Struct:
-        """Parse and register an attribute and its associated datatype.
-
-        Parameters
-        ----------
-        struct : polars.Struct
-            Current state of the `Polars` `Struct`.
-        name : str
-            New attribute name.
-        dtype : str
-            Expected `Polars` datatype for this attribute.
-
-        Returns
-        -------
-        : polars.Struct
-            Updated `Polars` `Struct` including the latest parsed addition.
-        """
-        field = pl.Field(name, POLARS_DATATYPES[dtype])
-
-        # keep track of the nested object encountered, or if non-nested add it to the
-        # the current nested object, or the root struct
-        if dtype in ("list", "struct"):
-            self.record["parents"].append((name, dtype))
-        elif self.record["parents"]:
-            self.record["structs"][-1].append(field)
         else:
             struct.append(field)
 
