@@ -302,13 +302,14 @@ def unpack_text(
 class SchemaParser:
     """Parse a plain text JSON schema into a `Polars` `Struct`."""
 
-    def __init__(self, source: str) -> None:
+    def __init__(self, source: str = "") -> None:
         """Instantiate the object.
 
         Parameters
         ----------
         source : str
-            JSON schema described in plain text, using `Polars` datatypes.
+            JSON schema described in plain text, using `Polars` datatypes. Defaults to
+            an empty string (`""`).
 
         Attributes
         ----------

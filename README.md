@@ -227,7 +227,7 @@ Parse a plain text JSON schema into a `Polars` `Struct`.
 #### Constructor
 
 ```python
-SchemaParser(source: str)
+SchemaParser(source: str = "")
 ```
 
 Instantiate the object.
@@ -235,6 +235,7 @@ Instantiate the object.
 **Parameters**
 
 - `source` \[`str`\]: JSON schema described in plain text, using `Polars` datatypes.
+  Defaults to an empty string (`""`).
 
 **Attributes**
 
