@@ -212,7 +212,6 @@ Parse a plain text JSON schema into a `Polars` `Struct`.
 
 **Methods**
 
-- [`struct()`](#unpackschemaparserstruct): Return the `Polars` `Struct`.
 - [`parse_closing_delimiter()`](#unpackschemaparserparse_closing_delimiter): Parse and
   register the closing of a nested structure.
 - [`parse_opening_delimiter()`](#unpackschemaparserparse_opening_delimiter): Parse and
@@ -243,20 +242,6 @@ Instantiate the object.
 - `struct` \[`polars.Struct`\]: Plain text schema parsed as a `Polars` `Struct`.
 
 #### Methods
-
-##### `unpack.SchemaParser.struct`
-
-```python
-struct() -> pl.Struct:
-```
-
-Return the `Polars` `Struct`.
-
-**Returns**
-
-- \[`polars.Struct`\]: Plain text schema parsed as a `Polars` `Struct`.
-
-**Decoration** via `@property`.
 
 ##### `unpack.SchemaParser.parse_closing_delimiter`
 
@@ -320,7 +305,7 @@ Parse and register an attribute and its associated datatype.
 ##### `unpack.SchemaParser.to_struct`
 
 ```python
-to_struct() -> None:
+to_struct() -> pl.Struct:
 ```
 
 Parse the plain text schema into a `Polars` `Struct`.
@@ -364,6 +349,10 @@ The following patterns (recognised via regular expressions) are supported:
 
 Indentation and trailing commas are ignored. The source is parsed until the end of the
 file is reached or a `SchemaParsingError` exception is raised.
+
+**Returns**
+
+- \[`polars.Struct`\]: Plain text schema parsed as a `Polars` `Struct`.
 
 **Raises**
 

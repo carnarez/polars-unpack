@@ -34,7 +34,7 @@ def test_datatype() -> None:
     df = pl.DataFrame([0, 1, 2, 3], dtype)
 
     # tested in the other module but might as well...
-    assert SchemaParser("Int64").struct == dtype
+    assert SchemaParser("Int64").to_struct() == dtype
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(df)
 
@@ -78,7 +78,7 @@ def test_list() -> None:
         dtype,
     )
 
-    assert SchemaParser("text:Utf8,json:List(Int64)").struct == dtype
+    assert SchemaParser("text:Utf8,json:List(Int64)").to_struct() == dtype
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(df.explode("json"))
 
@@ -148,7 +148,7 @@ def test_list_nested_in_list_nested_in_list() -> None:
         dtype,
     )
 
-    assert SchemaParser("text:Utf8,json:List(List(List(Int64)))").struct == dtype
+    assert SchemaParser("text:Utf8,json:List(List(List(Int64)))").to_struct() == dtype
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(
         df.explode("json").explode("json").explode("json"),
@@ -224,7 +224,7 @@ def test_list_nested_in_struct() -> None:
     assert (
         SchemaParser(
             "text:Utf8,json:Struct(foo:Struct(fox:Int64,foz:Int64),bar:List(Int64))",
-        ).struct
+        ).to_struct()
         == dtype
     )
     assert dtype.to_schema() == df.schema
@@ -479,13 +479,15 @@ def test_rename_fields() -> None:
     )
 
     # already tested somewhere but hey, won't hurt
-    assert SchemaParser("text:Utf8,json:Struct(foo:Int64,bar:Int64)").struct == dtype
+    assert (
+        SchemaParser("text:Utf8,json:Struct(foo:Int64,bar:Int64)").to_struct() == dtype
+    )
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(df_renamed.unnest("struct"))
 
     # test field renaming according to provided schema
     assert (
-        SchemaParser("string:Utf8,struct:Struct(fox:Int64,bax:Int64)").struct
+        SchemaParser("string:Utf8,struct:Struct(fox:Int64,bax:Int64)").to_struct()
         == dtype_renamed
     )
     assert dtype_renamed.to_schema() == df_renamed.schema
@@ -537,7 +539,9 @@ def test_struct() -> None:
         dtype,
     )
 
-    assert SchemaParser("text:Utf8,json:Struct(foo:Int64,bar:Int64)").struct == dtype
+    assert (
+        SchemaParser("text:Utf8,json:Struct(foo:Int64,bar:Int64)").to_struct() == dtype
+    )
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(df.unnest("json"))
 
@@ -596,7 +600,8 @@ def test_struct_nested_in_list() -> None:
     )
 
     assert (
-        SchemaParser("text:Utf8,json:List(Struct(foo:Int64,bar:Int64))").struct == dtype
+        SchemaParser("text:Utf8,json:List(Struct(foo:Int64,bar:Int64))").to_struct()
+        == dtype
     )
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(df.explode("json").unnest("json"))
@@ -681,7 +686,7 @@ def test_struct_nested_in_struct() -> None:
         SchemaParser(
             "text:Utf8,"
             "json:Struct(foo:Struct(fox:Int64,foz:Int64),bar:Struct(bax:Int64,baz:Int64))",
-        ).struct
+        ).to_struct()
         == dtype
     )
     assert dtype.to_schema() == df.schema

@@ -178,7 +178,7 @@ def parse_schema(path_schema: str) -> pl.Struct:
         JSON schema translated into `Polars` datatypes.
     """
     with pathlib.Path(path_schema).open() as f:
-        return SchemaParser(f.read()).struct
+        return SchemaParser(f.read()).to_struct()
 
 
 # TODO rename fields according to schema
@@ -320,17 +320,6 @@ class SchemaParser:
         """
         self.source = source
 
-    @property
-    def struct(self) -> pl.Struct:
-        """Return the `Polars` `Struct`.
-
-        Returns
-        -------
-        : polars.Struct
-            Plain text schema parsed as a `Polars` `Struct`.
-        """
-        return self.to_struct()
-
     def parse_closing_delimiter(self, struct: pl.Struct) -> pl.Struct:
         """Parse and register the closing of a nested structure.
 
@@ -431,7 +420,7 @@ class SchemaParser:
 
         return struct
 
-    def to_struct(self) -> None:
+    def to_struct(self) -> pl.Struct:
         r"""Parse the plain text schema into a `Polars` `Struct`.
 
         We expect something as follows:
@@ -474,6 +463,11 @@ class SchemaParser:
         Indentation and trailing commas are ignored. The source is parsed until the end
         of the file is reached or a `SchemaParsingError` exception is raised.
 
+        Returns
+        -------
+        : polars.Struct
+            Plain text schema parsed as a `Polars` `Struct`.
+
         Raises
         ------
         : SchemaParsingError
@@ -507,7 +501,10 @@ class SchemaParser:
         # clean up in case someone checks the object attributes
         delattr(self, "record")
 
-        return pl.Struct(struct)
+        # build the final object
+        self.struct = pl.Struct(struct)
+
+        return self.struct
 
 
 class SchemaParsingError(Exception):

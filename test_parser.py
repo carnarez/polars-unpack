@@ -32,7 +32,7 @@ def test_datatype(text: str, struct: pl.Struct) -> None:
     struct : polars.Struct
         Expected datatype.
     """
-    assert SchemaParser(text).struct == struct
+    assert SchemaParser(text).to_struct() == struct
 
 
 @pytest.mark.parametrize(
@@ -65,7 +65,7 @@ def test_datatype_nested(text: str, struct: pl.Struct) -> None:
     struct : polars.Struct
         Expected datatype.
     """
-    assert SchemaParser(text).struct == struct
+    assert SchemaParser(text).to_struct() == struct
 
 
 @pytest.mark.parametrize(
@@ -103,7 +103,7 @@ def test_delimiter(text: str, struct: pl.Struct) -> None:
     struct : polars.Struct
         Expected datatype.
     """
-    assert SchemaParser(text).struct == struct
+    assert SchemaParser(text).to_struct() == struct
 
 
 def test_list_nested_in_list() -> None:
@@ -117,7 +117,7 @@ def test_list_nested_in_list() -> None:
     """
     struct = pl.Struct([pl.List(pl.List(pl.Int8))])
 
-    assert SchemaParser("List(List(Int8))").struct == struct
+    assert SchemaParser("List(List(Int8))").to_struct() == struct
 
 
 def test_list_nested_in_struct() -> None:
@@ -133,7 +133,7 @@ def test_list_nested_in_struct() -> None:
     """
     struct = pl.Struct([pl.Field("", pl.Struct([pl.Field("foo", pl.List(pl.Int8))]))])
 
-    assert SchemaParser("Struct(foo: List(Int8))").struct == struct
+    assert SchemaParser("Struct(foo: List(Int8))").to_struct() == struct
 
 
 def test_pretty_printing() -> None:
@@ -299,7 +299,7 @@ def test_struct_nested_in_list() -> None:
         [pl.List(pl.Struct([pl.Field("foo", pl.Int8), pl.Field("bar", pl.Int8)]))],
     )
 
-    assert SchemaParser("List(Struct(foo: Int8, bar: Int8))").struct == struct
+    assert SchemaParser("List(Struct(foo: Int8, bar: Int8))").to_struct() == struct
 
 
 def test_struct_nested_in_struct() -> None:
@@ -324,7 +324,7 @@ def test_struct_nested_in_struct() -> None:
         ],
     )
 
-    assert SchemaParser("Struct(foo: Struct(bar: Int8))").struct == struct
+    assert SchemaParser("Struct(foo: Struct(bar: Int8))").to_struct() == struct
 
 
 def test_unexpected_syntax() -> None:
