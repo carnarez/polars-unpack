@@ -9,6 +9,7 @@ from unpack import (
     POLARS_DATATYPES,
     SchemaParser,
     SchemaParsingError,
+    UnknownDataTypeError,
     infer_schema,
     parse_schema,
 )
@@ -331,9 +332,13 @@ def test_unexpected_syntax() -> None:
     """Test for failure to parse the schema due to unknown/unexpected syntax."""
     with pytest.raises(SchemaParsingError):
         SchemaParser("!@#$%^&*").to_struct()
+    with pytest.raises(SchemaParsingError):
+        SchemaParser("Struct(!@#$%^&*)").to_struct()
 
 
 def test_unknown_datatype() -> None:
     """Test for unknown datatype."""
-    with pytest.raises(KeyError):
+    with pytest.raises(UnknownDataTypeError):
+        SchemaParser("Foo").to_struct()
+    with pytest.raises(UnknownDataTypeError):
         SchemaParser("Struct(foo: Bar)").to_struct()

@@ -3,8 +3,9 @@
 import json
 
 import polars as pl
+import pytest
 
-from unpack import SchemaParser, parse_schema, unpack_frame
+from unpack import SchemaParser, parse_schema, unpack_frame, unpack_ndjson, unpack_text
 
 # TODO test extra/missing fields in the schema
 # TODO test Struct-to-Utf8 casting (to keep a json column as is)
@@ -233,7 +234,18 @@ def test_list_nested_in_struct() -> None:
     )
 
 
-def test_real_life() -> None:
+@pytest.mark.parametrize(
+    ("df"),
+    [
+        unpack_frame(
+            pl.scan_ndjson("samples/complex.ndjson"),
+            parse_schema("samples/complex.schema"),
+        ).collect(),
+        unpack_ndjson("samples/complex.schema", "samples/complex.ndjson").collect(),
+        unpack_text("samples/complex.schema", "samples/complex.ndjson").collect(),
+    ],
+)
+def test_real_life(df: pl.DataFrame) -> None:
     """Test complex real life-like parsing and flattening.
 
     Test the following nested JSON content:
@@ -359,12 +371,12 @@ def test_real_life() -> None:
         }
     >
     ```
-    """
-    df_ndjson = unpack_frame(
-        pl.scan_ndjson("samples/complex.ndjson"),
-        parse_schema("samples/complex.schema"),
-    ).collect()
 
+    Parameters
+    ----------
+    df : polars.DataFrame
+        Unpacked `Polars` `DataFrame`.
+    """
     df_csv = pl.scan_csv(
         "samples/complex.csv",
         dtypes={
@@ -399,8 +411,8 @@ def test_real_life() -> None:
         },
     ).collect()
 
-    assert df_ndjson.dtypes == df_csv.dtypes
-    assert df_ndjson.frame_equal(df_csv)
+    assert df.dtypes == df_csv.dtypes
+    assert df.frame_equal(df_csv)
 
 
 def test_rename_fields() -> None:
