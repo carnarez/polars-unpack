@@ -257,7 +257,7 @@ def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
 def unpack_text(
     path_schema: str,
     path_data: str,
-    delimiter: str = "|",
+    separator: str = "|",
 ) -> pl.LazyFrame:
     r"""Lazily scan and unpack JSON data read as plain text, given a `Polars` schema.
 
@@ -267,9 +267,9 @@ def unpack_text(
         Path to the plain text schema describing the JSON content.
     path_data : str
         Path to the JSON file (or multiple files via glob patterns).
-    delimiter : str
-        Delimiter to use when parsing the JSON file as a CSV; defaults to `|` but `#` or
-        `$` could be good candidates too. Note this delimiter should \*NOT\* be present
+    separator : str
+        Separator to use when parsing the JSON file as a CSV; defaults to `|` but `#` or
+        `$` could be good candidates too. Note this separator should \*NOT\* be present
         in the file at all (`,` or `:` are thus out of scope given the JSON context).
 
     Returns
@@ -292,8 +292,10 @@ def unpack_text(
                 path_data,
                 has_header=False,
                 new_columns=["json"],
-                delimiter=delimiter,
-            ).select(pl.col("json").str.json_extract(schema))
+                separator=separator,
+            )
+            .select(pl.col("json").str.json_extract(schema))
+            .unnest("json")
         ),
         schema,
     )
@@ -320,6 +322,64 @@ class SchemaParser:
         """
         self.source = source
 
+    def format_error(self, unparsed: str) -> str:
+        """Format the message printed in the exception when an issue occurs.
+
+        ```
+        1 │ headers: Struct(
+        2 │     timestamp: Foo
+        ? │                ^^^
+        ```
+
+        Parameters
+        ----------
+        unparsed : str
+            State of the unparsed JSON schema; the issue is expected at the first line.
+
+        Returns
+        -------
+        : str
+            Clean and helpful error message, helpfully.
+
+        Notes
+        -----
+        This method is absolutely useless and could be removed.
+        """
+        # start/end of the issue
+        issue_start = self.source.index(unparsed)
+        issue_end = (
+            issue_start + m.start()
+            if (m := re.search(r"[()\[\]{}<>\n]", self.source[issue_start:]))
+            is not None
+            else len(self.source)
+        )
+
+        # start/end of the line
+        line_start = (
+            issue_start - self.source[:issue_start][::-1].index("\n") + 1
+            if issue_start and "\n" in self.source[:issue_start]
+            else 1
+        )
+        line_end = (
+            issue_end + self.source[issue_end:].index("\n")
+            if "\n" in self.source[issue_end:]
+            else len(self.source)
+        )
+
+        # line number at which the issue happens
+        line_number = self.source[:issue_start].count("\n") + 1
+
+        # captain obvious
+        msg = f"Tripped on line {line_number}\n\n"
+        for i, line in enumerate(self.source[:line_end].split("\n")):
+            msg += f"   {i + 1:-3d} │ {line}\n"
+        msg += "     ? │ "
+        msg += " " * (issue_start - line_start + 1)
+        msg += "^" * (issue_end - issue_start)
+        msg += "\n"
+
+        return msg
+
     def parse_attr_dtype(self, struct: pl.Struct, name: str, dtype: str) -> pl.Struct:
         """Parse and register an attribute and its associated datatype.
 
@@ -336,7 +396,17 @@ class SchemaParser:
         -------
         : polars.Struct
             Updated `Polars` `Struct` including the latest parsed addition.
+
+        Raises
+        ------
+        : UnknownDataTypeError
+            When an unknown/unsupported datatype is encountered.
         """
+        # sanity check
+        if dtype.lower() not in POLARS_DATATYPES:
+            raise UnknownDataTypeError(self.format_error(dtype))
+
+        dtype = dtype.lower()
         field = pl.Field(name, POLARS_DATATYPES[dtype])
 
         # keep track of the nested object encountered, or if non-nested add it to the
@@ -364,7 +434,18 @@ class SchemaParser:
         -------
         : polars.Struct
             Updated `Polars` `Struct` including the latest parsed addition.
+
+        Raises
+        ------
+        : UnknownDataTypeError
+            When an unknown/unsupported datatype is encountered.
         """
+        # sanity check
+        if dtype.lower() not in POLARS_DATATYPES:
+            raise UnknownDataTypeError(self.format_error(dtype))
+
+        dtype = dtype.lower()
+
         # keep track of the nested object encountered, or if non-nested add it to the
         # the current nested object, or the root struct
         if dtype in ("list", "struct"):
@@ -482,9 +563,9 @@ class SchemaParser:
         # continue until everything is parsed
         while s:
             if (m := re.match(r"([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)", s)) is not None:
-                struct = self.parse_attr_dtype(struct, m.group(1), m.group(2).lower())
+                struct = self.parse_attr_dtype(struct, m.group(1), m.group(2))
             elif (m := re.match(r"([A-Za-z0-9_]+)", s)) is not None:
-                struct = self.parse_lone_dtype(struct, m.group(1).lower())
+                struct = self.parse_lone_dtype(struct, m.group(1))
             elif (m := re.match(r"[(\[{<]", s)) is not None:
                 self.parse_opening_delimiter()
             elif (m := re.match(r"[)\]}>]", s)) is not None:
@@ -492,8 +573,7 @@ class SchemaParser:
             elif (m := re.match(r"[,\n\s]+", s)) is not None:
                 pass
             else:
-                e = f"{s[:50]}..."
-                raise SchemaParsingError(e)
+                raise SchemaParsingError(self.format_error(s))
 
             # clean up the current match
             s = s.replace(m.group(0), "", 1)
@@ -509,6 +589,10 @@ class SchemaParser:
 
 class SchemaParsingError(Exception):
     """When unexpected content is encountered and cannot be parsed."""
+
+
+class UnknownDataTypeError(Exception):
+    """When an unknown/unsupported datatype is encountered."""
 
 
 if __name__ == "__main__":

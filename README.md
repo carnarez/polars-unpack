@@ -70,6 +70,8 @@ Feel free to extend the functionalities to your own use case.
   `Struct`.
 - [`SchemaParsingError`](#unpackschemaparsingerror): When unexpected content is
   encountered and cannot be parsed.
+- [`UnknownDataTypeError`](#unpackunknowndatatypeerror): When an unknown/unsupported
+  datatype is encountered.
 
 ## Functions
 
@@ -179,7 +181,7 @@ Lazily scan and unpack newline-delimited JSON file given a `Polars` schema.
 ### `unpack.unpack_text`
 
 ```python
-unpack_text(path_schema: str, path_data: str, delimiter: str = "|") -> pl.LazyFrame:
+unpack_text(path_schema: str, path_data: str, separator: str = "|") -> pl.LazyFrame:
 ```
 
 Lazily scan and unpack JSON data read as plain text, given a `Polars` schema.
@@ -188,8 +190,8 @@ Lazily scan and unpack JSON data read as plain text, given a `Polars` schema.
 
 - `path_schema` \[`str`\]: Path to the plain text schema describing the JSON content.
 - `path_data` \[`str`\]: Path to the JSON file (or multiple files via glob patterns).
-- `delimiter` \[`str`\]: Delimiter to use when parsing the JSON file as a CSV; defaults
-  to `|` but `#` or `$` could be good candidates too. Note this delimiter should \*NOT\*
+- `separator` \[`str`\]: Separator to use when parsing the JSON file as a CSV; defaults
+  to `|` but `#` or `$` could be good candidates too. Note this separator should \*NOT\*
   be present in the file at all (`,` or `:` are thus out of scope given the JSON
   context).
 
@@ -212,6 +214,8 @@ Parse a plain text JSON schema into a `Polars` `Struct`.
 
 **Methods**
 
+- [`format_error()`](#unpackschemaparserformat_error): Format the message printed in the
+  exception when an issue occurs.
 - [`parse_attr_dtype()`](#unpackschemaparserparse_attr_dtype): Parse and register an
   attribute and its associated datatype.
 - [`parse_lone_dtype()`](#unpackschemaparserparse_lone_dtype): Parse and register a
@@ -243,6 +247,33 @@ Instantiate the object.
 
 #### Methods
 
+##### `unpack.SchemaParser.format_error`
+
+```python
+format_error(unparsed: str) -> str:
+```
+
+Format the message printed in the exception when an issue occurs.
+
+```
+1 │ headers: Struct(
+2 │     timestamp: Foo
+? │                ^^^
+```
+
+**Parameters**
+
+- `unparsed` \[`str`\]: State of the unparsed JSON schema; the issue is expected at the
+  first line.
+
+**Returns**
+
+- \[`str`\]: Clean and helpful error message, helpfully.
+
+**Notes**
+
+This method is absolutely useless and could be removed.
+
 ##### `unpack.SchemaParser.parse_attr_dtype`
 
 ```python
@@ -261,6 +292,10 @@ Parse and register an attribute and its associated datatype.
 
 - \[`polars.Struct`\]: Updated `Polars` `Struct` including the latest parsed addition.
 
+**Raises**
+
+- \[`UnknownDataTypeError`\]: When an unknown/unsupported datatype is encountered.
+
 ##### `unpack.SchemaParser.parse_lone_dtype`
 
 ```python
@@ -277,6 +312,10 @@ Parse and register a standalone datatype (found within a list for instance).
 **Returns**
 
 - \[`polars.Struct`\]: Updated `Polars` `Struct` including the latest parsed addition.
+
+**Raises**
+
+- \[`UnknownDataTypeError`\]: When an unknown/unsupported datatype is encountered.
 
 ##### `unpack.SchemaParser.parse_opening_delimiter`
 
@@ -366,4 +405,14 @@ When unexpected content is encountered and cannot be parsed.
 
 ```python
 SchemaParsingError()
+```
+
+### `unpack.UnknownDataTypeError`
+
+When an unknown/unsupported datatype is encountered.
+
+#### Constructor
+
+```python
+UnknownDataTypeError()
 ```
