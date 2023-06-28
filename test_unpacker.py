@@ -1,11 +1,10 @@
 """Assert capabilities of the `DataFrame` / `LazyFrame` flattener."""
 
 import json
-import pathlib
 
 import polars as pl
 
-from unpack import parse_schema, unpack_frame
+from unpack import SchemaParser, parse_schema, unpack_frame
 
 # TODO test extra/missing fields in the schema
 # TODO test Struct-to-Utf8 casting (to keep a json column as is)
@@ -34,7 +33,8 @@ def test_datatype() -> None:
 
     df = pl.DataFrame([0, 1, 2, 3], dtype)
 
-    assert parse_schema("Int64") == dtype
+    # tested in the other module but might as well...
+    assert SchemaParser("Int64").struct == dtype
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(df)
 
@@ -78,7 +78,7 @@ def test_list() -> None:
         dtype,
     )
 
-    assert parse_schema("text:Utf8,json:List(Int64)") == dtype
+    assert SchemaParser("text:Utf8,json:List(Int64)").struct == dtype
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(df.explode("json"))
 
@@ -148,7 +148,7 @@ def test_list_nested_in_list_nested_in_list() -> None:
         dtype,
     )
 
-    assert parse_schema("text:Utf8,json:List(List(List(Int64)))") == dtype
+    assert SchemaParser("text:Utf8,json:List(List(List(Int64)))").struct == dtype
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(
         df.explode("json").explode("json").explode("json"),
@@ -222,9 +222,9 @@ def test_list_nested_in_struct() -> None:
     )
 
     assert (
-        parse_schema(
+        SchemaParser(
             "text:Utf8,json:Struct(foo:Struct(fox:Int64,foz:Int64),bar:List(Int64))",
-        )
+        ).struct
         == dtype
     )
     assert dtype.to_schema() == df.schema
@@ -360,46 +360,44 @@ def test_real_life() -> None:
     >
     ```
     """
-    with pathlib.Path("samples/complex.schema").open() as f:
-        dtype = parse_schema(f.read())
+    df_ndjson = unpack_frame(
+        pl.scan_ndjson("samples/complex.ndjson"),
+        parse_schema("samples/complex.schema"),
+    ).collect()
 
-    with pathlib.Path("samples/complex.ndjson") as p:
-        df_ndjson = unpack_frame(pl.scan_ndjson(p), dtype).collect()
-
-    with pathlib.Path("samples/complex.csv") as p:
-        df_csv = pl.scan_csv(
-            p,
-            dtypes={
-                "timestamp": pl.Int64,
-                "source": pl.Utf8,
-                "offset": pl.Int64,
-                "transaction": pl.Utf8,
-                "location": pl.Int64,
-                "type": pl.Utf8,
-                "customerIdentifier": pl.Utf8,
-                "product": pl.Int64,
-                "productDescription": pl.Utf8,
-                "quantity": pl.Int64,
-                "vatRate": pl.Float64,
-                "lineAmountIncludingVat": pl.Float64,
-                "lineAmountExcludingVat": pl.Float64,
-                "lineAmountVat": pl.Float64,
-                "lineAmountCurrency": pl.Utf8,
-                "promotion": pl.Int64,
-                "promotionDescription": pl.Utf8,
-                "discountAmountIncludingVat": pl.Float64,
-                "discountAmountExcludingVat": pl.Float64,
-                "discountAmountVat": pl.Float64,
-                "discountAmountCurrency": pl.Utf8,
-                "method": pl.Utf8,
-                "company": pl.Utf8,
-                "transactionIdentifier": pl.Int64,
-                "totalAmountIncludingVat": pl.Float64,
-                "totalAmountExcludingVat": pl.Float64,
-                "totalAmountVat": pl.Float64,
-                "totalAmountCurrency": pl.Utf8,
-            },
-        ).collect()
+    df_csv = pl.scan_csv(
+        "samples/complex.csv",
+        dtypes={
+            "timestamp": pl.Int64,
+            "source": pl.Utf8,
+            "offset": pl.Int64,
+            "transaction": pl.Utf8,
+            "location": pl.Int64,
+            "type": pl.Utf8,
+            "customerIdentifier": pl.Utf8,
+            "product": pl.Int64,
+            "productDescription": pl.Utf8,
+            "quantity": pl.Int64,
+            "vatRate": pl.Float64,
+            "lineAmountIncludingVat": pl.Float64,
+            "lineAmountExcludingVat": pl.Float64,
+            "lineAmountVat": pl.Float64,
+            "lineAmountCurrency": pl.Utf8,
+            "promotion": pl.Int64,
+            "promotionDescription": pl.Utf8,
+            "discountAmountIncludingVat": pl.Float64,
+            "discountAmountExcludingVat": pl.Float64,
+            "discountAmountVat": pl.Float64,
+            "discountAmountCurrency": pl.Utf8,
+            "method": pl.Utf8,
+            "company": pl.Utf8,
+            "transactionIdentifier": pl.Int64,
+            "totalAmountIncludingVat": pl.Float64,
+            "totalAmountExcludingVat": pl.Float64,
+            "totalAmountVat": pl.Float64,
+            "totalAmountCurrency": pl.Utf8,
+        },
+    ).collect()
 
     assert df_ndjson.dtypes == df_csv.dtypes
     assert df_ndjson.frame_equal(df_csv)
@@ -481,14 +479,19 @@ def test_rename_fields() -> None:
     )
 
     # already tested somewhere but hey, won't hurt
-    assert parse_schema("text:Utf8,json:Struct(foo:Int64,bar:Int64)") == dtype
+    assert SchemaParser("text:Utf8,json:Struct(foo:Int64,bar:Int64)").struct == dtype
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(df_renamed.unnest("struct"))
 
     # test field renaming according to provided schema
-    assert parse_schema("string:Utf8,struct:Struct(fox:Int64,bax:Int64)") == dtype_renamed
+    assert (
+        SchemaParser("string:Utf8,struct:Struct(fox:Int64,bax:Int64)").struct
+        == dtype_renamed
+    )
     assert dtype_renamed.to_schema() == df_renamed.schema
-    assert unpack_frame(df_renamed, dtype_renamed).frame_equal(df_renamed.unnest("struct"))
+    assert unpack_frame(df_renamed, dtype_renamed).frame_equal(
+        df_renamed.unnest("struct"),
+    )
 
 
 def test_struct() -> None:
@@ -534,7 +537,7 @@ def test_struct() -> None:
         dtype,
     )
 
-    assert parse_schema("text:Utf8,json:Struct(foo:Int64,bar:Int64)") == dtype
+    assert SchemaParser("text:Utf8,json:Struct(foo:Int64,bar:Int64)").struct == dtype
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(df.unnest("json"))
 
@@ -592,7 +595,9 @@ def test_struct_nested_in_list() -> None:
         dtype,
     )
 
-    assert parse_schema("text:Utf8,json:List(Struct(foo:Int64,bar:Int64))") == dtype
+    assert (
+        SchemaParser("text:Utf8,json:List(Struct(foo:Int64,bar:Int64))").struct == dtype
+    )
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(df.explode("json").unnest("json"))
 
@@ -673,10 +678,10 @@ def test_struct_nested_in_struct() -> None:
     )
 
     assert (
-        parse_schema(
+        SchemaParser(
             "text:Utf8,"
             "json:Struct(foo:Struct(fox:Int64,foz:Int64),bar:Struct(bax:Int64,baz:Int64))",
-        )
+        ).struct
         == dtype
     )
     assert dtype.to_schema() == df.schema

@@ -5,7 +5,13 @@ import pathlib
 import polars as pl
 import pytest
 
-from unpack import POLARS_DATATYPES, SchemaParsingError, infer_schema, parse_schema
+from unpack import (
+    POLARS_DATATYPES,
+    SchemaParser,
+    SchemaParsingError,
+    infer_schema,
+    parse_schema,
+)
 
 
 @pytest.mark.parametrize(
@@ -26,7 +32,7 @@ def test_datatype(text: str, struct: pl.Struct) -> None:
     struct : polars.Struct
         Expected datatype.
     """
-    assert parse_schema(text) == struct
+    assert SchemaParser(text).struct == struct
 
 
 @pytest.mark.parametrize(
@@ -59,7 +65,7 @@ def test_datatype_nested(text: str, struct: pl.Struct) -> None:
     struct : polars.Struct
         Expected datatype.
     """
-    assert parse_schema(text) == struct
+    assert SchemaParser(text).struct == struct
 
 
 @pytest.mark.parametrize(
@@ -97,7 +103,7 @@ def test_delimiter(text: str, struct: pl.Struct) -> None:
     struct : polars.Struct
         Expected datatype.
     """
-    assert parse_schema(text) == struct
+    assert SchemaParser(text).struct == struct
 
 
 def test_list_nested_in_list() -> None:
@@ -111,7 +117,7 @@ def test_list_nested_in_list() -> None:
     """
     struct = pl.Struct([pl.List(pl.List(pl.Int8))])
 
-    assert parse_schema("List(List(Int8))") == struct
+    assert SchemaParser("List(List(Int8))").struct == struct
 
 
 def test_list_nested_in_struct() -> None:
@@ -127,7 +133,7 @@ def test_list_nested_in_struct() -> None:
     """
     struct = pl.Struct([pl.Field("", pl.Struct([pl.Field("foo", pl.List(pl.Int8))]))])
 
-    assert parse_schema("Struct(foo: List(Int8))") == struct
+    assert SchemaParser("Struct(foo: List(Int8))").struct == struct
 
 
 def test_pretty_printing() -> None:
@@ -263,11 +269,8 @@ def test_real_life() -> None:
     >
     ```
     """
-    with pathlib.Path("samples/complex.schema").open() as f:
-        dtype = parse_schema(f.read())
-
-    with pathlib.Path("samples/complex.ndjson") as p:
-        df = pl.scan_ndjson(p).collect()
+    dtype = parse_schema("samples/complex.schema")
+    df = pl.scan_ndjson("samples/complex.ndjson").collect()
 
     assert dtype.to_schema() == df.schema
 
@@ -296,7 +299,7 @@ def test_struct_nested_in_list() -> None:
         [pl.List(pl.Struct([pl.Field("foo", pl.Int8), pl.Field("bar", pl.Int8)]))],
     )
 
-    assert parse_schema("List(Struct(foo: Int8, bar: Int8))") == struct
+    assert SchemaParser("List(Struct(foo: Int8, bar: Int8))").struct == struct
 
 
 def test_struct_nested_in_struct() -> None:
@@ -321,10 +324,16 @@ def test_struct_nested_in_struct() -> None:
         ],
     )
 
-    assert parse_schema("Struct(foo: Struct(bar: Int8))") == struct
+    assert SchemaParser("Struct(foo: Struct(bar: Int8))").struct == struct
 
 
 def test_unexpected_syntax() -> None:
     """Test for failure to parse the schema due to unknown/unexpected syntax."""
     with pytest.raises(SchemaParsingError):
-        parse_schema("!@#$%^&*")
+        SchemaParser("!@#$%^&*").to_struct()
+
+
+def test_unknown_datatype() -> None:
+    """Test for unknown datatype."""
+    with pytest.raises(KeyError):
+        SchemaParser("Struct(foo: Bar)").to_struct()

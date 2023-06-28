@@ -80,10 +80,6 @@ POLARS_DATATYPES: dict[str, pl.DataType] = {
 }
 
 
-class SchemaParsingError(Exception):
-    """When unexpected content is encountered and cannot be parsed."""
-
-
 def infer_schema(path_data: str) -> str:
     """Lazily scan newline-delimited JSON data and print the `Polars`-inferred schema.
 
@@ -168,164 +164,21 @@ def infer_schema(path_data: str) -> str:
     return schema.strip()
 
 
-# TODO refactor this
-def parse_schema(schema: str) -> pl.Struct:
-    r"""Parse a plain text JSON schema into a `Polars` `Struct`.
-
-    We expect something as follows:
-
-    ```
-    attribute: Utf8
-    nested: Struct(
-        foo: Float32
-        bar: Int16
-        vector: List[UInt8]
-    )
-    ```
-
-    to translate into a `Polars` native `Struct` object:
-
-    ```python
-    polars.Struct([
-        polars.Field("attribute", polars.Utf8),
-        polars.Struct([
-            polars.Field("foo", polars.Float32),
-            polars.Field("bar", polars.Int16),
-            polars.Field("vector", polars.List(polars.Uint8))
-        ])
-    ])
-    ```
-
-    The following patterns (recognised via regular expressions) are supported:
-
-    * `([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)` for an attribute name, a column (`:`) and
-      a datatype; for instance `attribute: Utf8` in the example above. Attribute name
-      and datatype must not have spaces and only include alphanumerical or underscore
-      (`_`) characters.
-    * `([A-Za-z0-9_]+)` for a lone datatype; for instance the inner content of the
-      `List()` in the example above. Keep in mind this datatype could be a complex
-      structure as much as a canonical datatype.
-    * `[(\[{<]` and its `[)\]}>]` counterpart for opening and closing of nested
-      datatypes. Any of these characters can be used to open or close nested structures;
-      mixing also allowed, for the better or the worse.
-
-    Indentation and commas are ignored. The source is parsed until end-of-file or a
-    `SchemaParsingError` exception is raised.
+def parse_schema(path_schema: str) -> pl.Struct:
+    """Parse a plain text JSON schema into a `Polars` `Struct`.
 
     Parameters
     ----------
-    schema : str
-        Content of the plain text file describing the JSON schema.
+    path_schema : str
+        Path to the plain text file describing the JSON schema.
 
     Returns
     -------
     : polars.Struct
         JSON schema translated into `Polars` datatypes.
-
-    Raises
-    ------
-    : SchemaParsingError
-        When unexpected content is encountered and cannot be parsed.
     """
-    root_struct: list = []
-
-    parent_names: list[str | None] = []  # names of parent objects (allowing nesting)
-    parent_dtypes: list[pl.List | pl.Struct] = []  # datatypes of parent objects
-
-    within_lists: list[list[pl.DataType]] = []  # children objects within each list
-    within_structs: list[list[pl.DataType]] = []  # children objects within each struct
-
-    # continue until everything is parsed
-    while len(schema):
-        # new field
-        if (
-            m := re.match(r"([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)", schema)
-        ) is not None:
-            name = m.group(1)
-            dtype = m.group(2).lower()
-
-            # keep track of the last nested object encountered
-            if dtype in ("list", "struct"):
-                parent_names.append(name)
-                parent_dtypes.append(dtype)
-
-            # add the non-nested field to the current object
-            else:
-                field = pl.Field(name, POLARS_DATATYPES[dtype])
-                if parent_dtypes:
-                    within_structs[-1].append(field)
-                else:
-                    root_struct.append(field)  # not sure this happens...
-
-            schema = schema.replace(m.group(0), "", 1)
-
-        # within nested field
-        if (m := re.match(r"([A-Za-z0-9_]+)", schema)) is not None:
-            dtype = m.group(1).lower()
-
-            # keep track of the last nested object encountered
-            if dtype in ("list", "struct"):
-                parent_names.append("")
-                parent_dtypes.append(dtype)
-
-            # add the non-nested field to the current object
-            elif parent_dtypes:
-                within_lists.append(POLARS_DATATYPES[dtype])
-            else:
-                root_struct.append(pl.Field("", POLARS_DATATYPES[dtype]))
-
-            schema = schema.replace(m.group(0), "", 1)
-
-        # start of nested field
-        elif (m := re.match(r"[(\[{<]", schema)) is not None:
-            if parent_dtypes[-1] == "struct":
-                within_structs.append([])
-
-            schema = schema.replace(m.group(0), "", 1)
-
-        # end of nested field
-        elif (m := re.match(r"[)\]}>]", schema)) is not None:
-            name = parent_names.pop()
-            dtype = parent_dtypes.pop()
-
-            # generate the field
-            if dtype == "list":
-                f = within_lists.pop()
-                # named list
-                if name:
-                    field = (
-                        pl.Field(name, pl.List(f.dtype))
-                        if hasattr(f, "dtype")
-                        else pl.Field(name, pl.List(f))
-                    )
-                # list within list
-                else:
-                    field = pl.List(f.dtype) if hasattr(f, "dtype") else pl.List(f)
-            else:
-                field = pl.Field(name, pl.Struct(within_structs.pop()))
-
-            # add the nested field to the current object
-            if parent_dtypes:
-                if parent_dtypes[-1] == "list":
-                    within_lists.append(field)
-                else:
-                    within_structs[-1].append(field)
-            else:
-                root_struct.append(field)
-
-            schema = schema.replace(m.group(0), "", 1)
-
-        # expected but ignored
-        elif (m := re.match(r"[,\n\s]+", schema)) is not None:
-            schema = schema.replace(m.group(0), "", 1)
-            continue
-
-        # unexpected content, raise an exception
-        else:
-            e = f"{schema[:50]}..."
-            raise SchemaParsingError(e)
-
-    return pl.Struct(root_struct)
+    with pathlib.Path(path_schema).open() as f:
+        return SchemaParser(f.read()).struct
 
 
 # TODO rename fields according to schema
@@ -398,8 +251,7 @@ def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
     : polars.LazyFrame
         Unpacked JSON content, lazy style.
     """
-    with pathlib.Path(path_schema).open() as f:
-        return unpack_frame(pl.scan_ndjson(path_data), parse_schema(f.read()))
+    return unpack_frame(pl.scan_ndjson(path_data), parse_schema(path_schema))
 
 
 def unpack_text(
@@ -432,20 +284,233 @@ def unpack_text(
     The preferred way for native JSON content remains to use the `unpack_ndjson()`
     function defined in this same script.
     """
-    with pathlib.Path(path_schema).open() as f:
-        schema = parse_schema(f.read())
+    schema = parse_schema(path_schema)
 
-        return unpack_frame(
-            (
-                pl.scan_csv(
-                    path_data,
-                    has_header=False,
-                    new_columns=["json"],
-                    delimiter=delimiter,
-                ).select(pl.col("json").str.json_extract(schema))
-            ),
-            schema,
+    return unpack_frame(
+        (
+            pl.scan_csv(
+                path_data,
+                has_header=False,
+                new_columns=["json"],
+                delimiter=delimiter,
+            ).select(pl.col("json").str.json_extract(schema))
+        ),
+        schema,
+    )
+
+
+class SchemaParser:
+    """Parse a plain text JSON schema into a `Polars` `Struct`."""
+
+    def __init__(self, source: str) -> None:
+        """Instantiate the object.
+
+        Parameters
+        ----------
+        source : str
+            JSON schema described in plain text, using `Polars` datatypes.
+
+        Attributes
+        ----------
+        source : str
+            JSON schema described in plain text, using `Polars` datatypes.
+        struct : polars.Struct
+            Plain text schema parsed as a `Polars` `Struct`.
+        """
+        self.source = source
+
+    @property
+    def struct(self) -> pl.Struct:
+        """Return the `Polars` `Struct`.
+
+        Returns
+        -------
+        : polars.Struct
+            Plain text schema parsed as a `Polars` `Struct`.
+        """
+        return self.to_struct()
+
+    def parse_closing_delimiter(self, struct: pl.Struct) -> pl.Struct:
+        """Parse and register the closing of a nested structure.
+
+        Parameters
+        ----------
+        struct : polars.Struct
+            Current state of the `Polars` `Struct`.
+
+        Returns
+        -------
+        : polars.Struct
+            Updated `Polars` `Struct` including the latest parsed addition.
+        """
+        name, dtype = self.record["parents"].pop()
+
+        # list
+        if dtype == "list":
+            f = self.record["lists"].pop()
+            d = f.dtype if hasattr(f, "dtype") else f
+
+            # list within struct or list within list
+            field = pl.Field(name, pl.List(d)) if name else pl.List(d)
+
+        # struct
+        else:
+            field = pl.Field(name, pl.Struct(self.record["structs"].pop()))
+
+        # add the attribute to the current nested object, or the root struct
+        if self.record["parents"]:
+            if self.record["parents"][-1][1] == "list":
+                self.record["lists"].append(field)
+            else:
+                self.record["structs"][-1].append(field)
+        else:
+            struct.append(field)
+
+        return struct
+
+    def parse_opening_delimiter(self) -> None:
+        """Parse and register the opening of a nested structure."""
+        # create a new list to register new fields
+        if self.record["parents"][-1][1] == "struct":
+            self.record["structs"].append([])
+
+    def parse_lone_dtype(self, struct: pl.Struct, dtype: str) -> pl.Struct:
+        """Parse and register a standalone datatype (found within a list for instance).
+
+        Parameters
+        ----------
+        struct : polars.Struct
+            Current state of the `Polars` `Struct`.
+        dtype : str
+            Expected `Polars` datatype.
+
+        Returns
+        -------
+        : polars.Struct
+            Updated `Polars` `Struct` including the latest parsed addition.
+        """
+        # keep track of the nested object encountered, or if non-nested add it to the
+        # the current nested object, or the root struct
+        if dtype in ("list", "struct"):
+            self.record["parents"].append(("", dtype))
+        elif self.record["parents"]:
+            self.record["lists"].append(POLARS_DATATYPES[dtype])
+        else:
+            struct.append(pl.Field("", POLARS_DATATYPES[dtype]))
+
+        return struct
+
+    def parse_attr_dtype(self, struct: pl.Struct, name: str, dtype: str) -> pl.Struct:
+        """Parse and register an attribute and its associated datatype.
+
+        Parameters
+        ----------
+        struct : polars.Struct
+            Current state of the `Polars` `Struct`.
+        name : str
+            New attribute name.
+        dtype : str
+            Expected `Polars` datatype for this attribute.
+
+        Returns
+        -------
+        : polars.Struct
+            Updated `Polars` `Struct` including the latest parsed addition.
+        """
+        field = pl.Field(name, POLARS_DATATYPES[dtype])
+
+        # keep track of the nested object encountered, or if non-nested add it to the
+        # the current nested object, or the root struct
+        if dtype in ("list", "struct"):
+            self.record["parents"].append((name, dtype))
+        elif self.record["parents"]:
+            self.record["structs"][-1].append(field)
+        else:
+            struct.append(field)
+
+        return struct
+
+    def to_struct(self) -> None:
+        r"""Parse the plain text schema into a `Polars` `Struct`.
+
+        We expect something as follows:
+
+        ```
+        attribute: Utf8
+        nested: Struct(
+            foo: Float32
+            bar: Int16
+            vector: List[UInt8]
         )
+        ```
+
+        to translate into a `Polars` native `Struct` object:
+
+        ```python
+        polars.Struct([
+            polars.Field("attribute", polars.Utf8),
+            polars.Struct([
+                polars.Field("foo", polars.Float32),
+                polars.Field("bar", polars.Int16),
+                polars.Field("vector", polars.List(polars.UInt8))
+            ])
+        ])
+        ```
+
+        The following patterns (recognised via regular expressions) are supported:
+
+        * `([A-Za-z0-9_]+)\\s*:\\s*([A-Za-z0-9_]+)` for an attribute name, a column
+          (`:`) and a datatype; for instance `attribute: Utf8` in the example above.
+          Attribute name and datatype must not have spaces and only include
+          alphanumerical or underscore (`_`) characters.
+        * `([A-Za-z0-9_]+)` for a lone datatype; for instance the inner content of the
+          `List()` in the example above. Keep in mind this datatype could be a complex
+          structure as much as a canonical datatype.
+        * `[(\\[{<]` and its `[)\\]}>]` counterpart for opening and closing of nested
+          datatypes. Any of these characters can be used to open or close nested
+          structures; mixing also allowed, for the better or the worse.
+
+        Indentation and trailing commas are ignored. The source is parsed until the end
+        of the file is reached or a `SchemaParsingError` exception is raised.
+
+        Raises
+        ------
+        : SchemaParsingError
+            When unexpected content is encountered and cannot be parsed.
+        """
+        s = self.source
+        struct: list[pl.Datatype] = []
+
+        # bookkeeping
+        self.record: dict = {"parents": [], "lists": [], "structs": []}
+
+        # continue until everything is parsed
+        while s:
+            if (m := re.match(r"([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)", s)) is not None:
+                struct = self.parse_attr_dtype(struct, m.group(1), m.group(2).lower())
+            elif (m := re.match(r"([A-Za-z0-9_]+)", s)) is not None:
+                struct = self.parse_lone_dtype(struct, m.group(1).lower())
+            elif (m := re.match(r"[(\[{<]", s)) is not None:
+                self.parse_opening_delimiter()
+            elif (m := re.match(r"[)\]}>]", s)) is not None:
+                struct = self.parse_closing_delimiter(struct)
+            elif (m := re.match(r"[,\n\s]+", s)) is not None:
+                pass
+            else:
+                e = f"{s[:50]}..."
+                raise SchemaParsingError(e)
+
+            # clean up the current match
+            s = s.replace(m.group(0), "", 1)
+
+        # clean up in case someone checks the object attributes
+        delattr(self, "record")
+
+        return pl.Struct(struct)
+
+
+class SchemaParsingError(Exception):
+    """When unexpected content is encountered and cannot be parsed."""
 
 
 if __name__ == "__main__":

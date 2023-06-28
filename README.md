@@ -66,6 +66,8 @@ Feel free to extend the functionalities to your own use case.
 
 **Classes**
 
+- [`SchemaParser`](#unpackschemaparser): Parse a plain text JSON schema into a `Polars`
+  `Struct`.
 - [`SchemaParsingError`](#unpackschemaparsingerror): When unexpected content is
   encountered and cannot be parsed.
 
@@ -112,62 +114,18 @@ writing a schema by hand.
 ### `unpack.parse_schema`
 
 ```python
-parse_schema(schema: str) -> pl.Struct:
+parse_schema(path_schema: str) -> pl.Struct:
 ```
 
 Parse a plain text JSON schema into a `Polars` `Struct`.
 
-We expect something as follows:
-
-```
-attribute: Utf8
-nested: Struct(
-    foo: Float32
-    bar: Int16
-    vector: List[UInt8]
-)
-```
-
-to translate into a `Polars` native `Struct` object:
-
-```python
-polars.Struct([
-    polars.Field("attribute", polars.Utf8),
-    polars.Struct([
-        polars.Field("foo", polars.Float32),
-        polars.Field("bar", polars.Int16),
-        polars.Field("vector", polars.List(polars.Uint8))
-    ])
-])
-```
-
-The following patterns (recognised via regular expressions) are supported:
-
-- `([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)` for an attribute name, a column (`:`) and a
-  datatype; for instance `attribute: Utf8` in the example above. Attribute name and
-  datatype must not have spaces and only include alphanumerical or underscore (`_`)
-  characters.
-- `([A-Za-z0-9_]+)` for a lone datatype; for instance the inner content of the `List()`
-  in the example above. Keep in mind this datatype could be a complex structure as much
-  as a canonical datatype.
-- `[(\[{<]` and its `[)\]}>]` counterpart for opening and closing of nested datatypes.
-  Any of these characters can be used to open or close nested structures; mixing also
-  allowed, for the better or the worse.
-
-Indentation and commas are ignored. The source is parsed until end-of-file or a
-`SchemaParsingError` exception is raised.
-
 **Parameters**
 
-- `schema` \[`str`\]: Content of the plain text file describing the JSON schema.
+- `path_schema` \[`str`\]: Path to the plain text file describing the JSON schema.
 
 **Returns**
 
 - \[`polars.Struct`\]: JSON schema translated into `Polars` datatypes.
-
-**Raises**
-
-- \[`SchemaParsingError`\]: When unexpected content is encountered and cannot be parsed.
 
 ### `unpack.unpack_frame`
 
@@ -247,6 +205,168 @@ preferred way for native JSON content remains to use the `unpack_ndjson()` funct
 defined in this same script.
 
 ## Classes
+
+### `unpack.SchemaParser`
+
+Parse a plain text JSON schema into a `Polars` `Struct`.
+
+**Methods**
+
+- [`struct()`](#unpackschemaparserstruct): Return the `Polars` `Struct`.
+- [`parse_closing_delimiter()`](#unpackschemaparserparse_closing_delimiter): Parse and
+  register the closing of a nested structure.
+- [`parse_opening_delimiter()`](#unpackschemaparserparse_opening_delimiter): Parse and
+  register the opening of a nested structure.
+- [`parse_lone_dtype()`](#unpackschemaparserparse_lone_dtype): Parse and register a
+  standalone datatype (found within a list for instance).
+- [`parse_attr_dtype()`](#unpackschemaparserparse_attr_dtype): Parse and register an
+  attribute and its associated datatype.
+- [`to_struct()`](#unpackschemaparserto_struct): Parse the plain text schema into a
+  `Polars` `Struct`.
+
+#### Constructor
+
+```python
+SchemaParser(source: str)
+```
+
+Instantiate the object.
+
+**Parameters**
+
+- `source` \[`str`\]: JSON schema described in plain text, using `Polars` datatypes.
+
+**Attributes**
+
+- `source` \[`str`\]: JSON schema described in plain text, using `Polars` datatypes.
+- `struct` \[`polars.Struct`\]: Plain text schema parsed as a `Polars` `Struct`.
+
+#### Methods
+
+##### `unpack.SchemaParser.struct`
+
+```python
+struct() -> pl.Struct:
+```
+
+Return the `Polars` `Struct`.
+
+**Returns**
+
+- \[`polars.Struct`\]: Plain text schema parsed as a `Polars` `Struct`.
+
+**Decoration** via `@property`.
+
+##### `unpack.SchemaParser.parse_closing_delimiter`
+
+```python
+parse_closing_delimiter(struct: pl.Struct) -> pl.Struct:
+```
+
+Parse and register the closing of a nested structure.
+
+**Parameters**
+
+- `struct` \[`polars.Struct`\]: Current state of the `Polars` `Struct`.
+
+**Returns**
+
+- \[`polars.Struct`\]: Updated `Polars` `Struct` including the latest parsed addition.
+
+##### `unpack.SchemaParser.parse_opening_delimiter`
+
+```python
+parse_opening_delimiter() -> None:
+```
+
+Parse and register the opening of a nested structure.
+
+##### `unpack.SchemaParser.parse_lone_dtype`
+
+```python
+parse_lone_dtype(struct: pl.Struct, dtype: str) -> pl.Struct:
+```
+
+Parse and register a standalone datatype (found within a list for instance).
+
+**Parameters**
+
+- `struct` \[`polars.Struct`\]: Current state of the `Polars` `Struct`.
+- `dtype` \[`str`\]: Expected `Polars` datatype.
+
+**Returns**
+
+- \[`polars.Struct`\]: Updated `Polars` `Struct` including the latest parsed addition.
+
+##### `unpack.SchemaParser.parse_attr_dtype`
+
+```python
+parse_attr_dtype(struct: pl.Struct, name: str, dtype: str) -> pl.Struct:
+```
+
+Parse and register an attribute and its associated datatype.
+
+**Parameters**
+
+- `struct` \[`polars.Struct`\]: Current state of the `Polars` `Struct`.
+- `name` \[`str`\]: New attribute name.
+- `dtype` \[`str`\]: Expected `Polars` datatype for this attribute.
+
+**Returns**
+
+- \[`polars.Struct`\]: Updated `Polars` `Struct` including the latest parsed addition.
+
+##### `unpack.SchemaParser.to_struct`
+
+```python
+to_struct() -> None:
+```
+
+Parse the plain text schema into a `Polars` `Struct`.
+
+We expect something as follows:
+
+```
+attribute: Utf8
+nested: Struct(
+    foo: Float32
+    bar: Int16
+    vector: List[UInt8]
+)
+```
+
+to translate into a `Polars` native `Struct` object:
+
+```python
+polars.Struct([
+    polars.Field("attribute", polars.Utf8),
+    polars.Struct([
+        polars.Field("foo", polars.Float32),
+        polars.Field("bar", polars.Int16),
+        polars.Field("vector", polars.List(polars.UInt8))
+    ])
+])
+```
+
+The following patterns (recognised via regular expressions) are supported:
+
+- `([A-Za-z0-9_]+)\\s*:\\s*([A-Za-z0-9_]+)` for an attribute name, a column (`:`) and a
+  datatype; for instance `attribute: Utf8` in the example above. Attribute name and
+  datatype must not have spaces and only include alphanumerical or underscore (`_`)
+  characters.
+- `([A-Za-z0-9_]+)` for a lone datatype; for instance the inner content of the `List()`
+  in the example above. Keep in mind this datatype could be a complex structure as much
+  as a canonical datatype.
+- `[(\\[{<]` and its `[)\\]}>]` counterpart for opening and closing of nested datatypes.
+  Any of these characters can be used to open or close nested structures; mixing also
+  allowed, for the better or the worse.
+
+Indentation and trailing commas are ignored. The source is parsed until the end of the
+file is reached or a `SchemaParsingError` exception is raised.
+
+**Raises**
+
+- \[`SchemaParsingError`\]: When unexpected content is encountered and cannot be parsed.
 
 ### `unpack.SchemaParsingError`
 
