@@ -20,7 +20,7 @@ A few extra points:
 * It seems `Polars` only accepts input starting with `{`, but not `[` (such as a JSON
   list); although it _is_ valid in a JSON sense...
 
-The current ~~working~~ state of this little DIY can be checked (in `Docker`) via:
+The current working state of this little DIY can be checked (in `Docker`) via:
 
 ```shell
 $ make env
@@ -55,6 +55,8 @@ import re
 import sys
 
 import polars as pl
+
+JSON_PATH_SEPARATOR: str = "."
 
 POLARS_DATATYPES: dict[str, pl.DataType] = {
     "array": pl.List,
@@ -178,13 +180,16 @@ def parse_schema(path_schema: str) -> pl.Struct:
         JSON schema translated into `Polars` datatypes.
     """
     with pathlib.Path(path_schema).open() as f:
-        return SchemaParser(f.read()).to_struct()
+        sp = SchemaParser(f.read())
+        sp.to_struct()
+
+        return sp
 
 
-# TODO rename fields according to schema
 def unpack_frame(
     df: pl.DataFrame | pl.LazyFrame,
     dtype: pl.DataType,
+    json_path: str = "",
     column: str | None = None,
 ) -> pl.DataFrame | pl.LazyFrame:
     """Unpack a [nested] JSON into a `Polars` `DataFrame` or `LazyFrame` given a schema.
@@ -196,6 +201,8 @@ def unpack_frame(
     dtype : polars.DataType
         Datatype of the current object (`polars.Array`, `polars.List` or
         `polars.Struct`).
+    json_path : str
+        Full JSON path (_aka_ breadcrumbs) to the current field.
     column : str | None
         Column to apply the unpacking on; defaults to `None`. This is used when the
         current object has children but no field name; this is the case for convoluted
@@ -208,30 +215,35 @@ def unpack_frame(
 
     Notes
     -----
-    The `polars.Array` is considered the [obsolete] ancestor of `polars.List` and
-    expected to behave identically.
+    * The `polars.Array` is considered the [obsolete] ancestor of `polars.List` and
+      expected to behave identically.
+    * Each unpacked column will be renamed as their full JSON path to avoid potential
+      identical names.
     """
     # if we are dealing with a nesting column
     if column is not None:
         if dtype in (pl.Array, pl.List):
-            df = unpack_frame(df.explode(column), dtype.inner, column)
+            # rename column to json path
+            jp = f"{json_path}{JSON_PATH_SEPARATOR}{column}".lstrip(JSON_PATH_SEPARATOR)
+            if column in df.columns:
+                df = df.rename({column: jp})
+            # unpack
+            df = unpack_frame(df.explode(jp), dtype.inner, jp, jp)
         elif dtype == pl.Struct:
-            df = unpack_frame(df.unnest(column), dtype)
+            df = unpack_frame(df.unnest(column), dtype, json_path)
 
     # unpack nested children columns when encountered
     elif hasattr(dtype, "fields"):
         for f in dtype.fields:
+            # rename column to json path
+            jp = f"{json_path}{JSON_PATH_SEPARATOR}{f.name}".lstrip(JSON_PATH_SEPARATOR)
+            if f.name in df.columns:
+                df = df.rename({f.name: jp})
+            # unpack
             if type(f.dtype) in (pl.Array, pl.List):
-                df = unpack_frame(
-                    df.explode(column if column is not None else f.name),
-                    f.dtype.inner,
-                    f.name,
-                )
+                df = unpack_frame(df.explode(jp), f.dtype.inner, jp, jp)
             elif type(f.dtype) == pl.Struct:
-                df = unpack_frame(
-                    df.unnest(column if column is not None else f.name),
-                    f.dtype,
-                )
+                df = unpack_frame(df.unnest(jp), f.dtype, jp)
 
     return df
 
@@ -251,7 +263,11 @@ def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
     : polars.LazyFrame
         Unpacked JSON content, lazy style.
     """
-    return unpack_frame(pl.scan_ndjson(path_data), parse_schema(path_schema))
+    schema = parse_schema(path_schema)
+
+    df = pl.scan_ndjson(path_data)
+
+    return unpack_frame(df, schema.struct).rename(schema.json_paths)
 
 
 def unpack_text(
@@ -286,19 +302,18 @@ def unpack_text(
     """
     schema = parse_schema(path_schema)
 
-    return unpack_frame(
-        (
-            pl.scan_csv(
-                path_data,
-                has_header=False,
-                new_columns=["json"],
-                separator=separator,
-            )
-            .select(pl.col("json").str.json_extract(schema))
-            .unnest("json")
-        ),
-        schema,
+    df = (
+        pl.scan_csv(
+            path_data,
+            has_header=False,
+            new_columns=["json"],
+            separator=separator,
+        )
+        .select(pl.col("json").str.json_extract(schema.struct))
+        .unnest("json")
     )
+
+    return unpack_frame(df, schema.struct).rename(schema.json_paths)
 
 
 class SchemaParser:
@@ -315,6 +330,12 @@ class SchemaParser:
 
         Attributes
         ----------
+        columns : list[str]
+            Expected list of columns in the final `Polars` `DataFrame` or `LazyFrame`.
+        dtypes : list[polars.DataType]
+            Expected list of datatypes in the final `Polars` `DataFrame` or `LazyFrame`.
+        json_paths : dit[str, str]
+            Dictionary of JSON path -> column name pairs.
         source : str
             JSON schema described in plain text, using `Polars` datatypes.
         struct : polars.Struct
@@ -322,13 +343,20 @@ class SchemaParser:
         """
         self.source = source
 
+        self.columns: list[str] = []
+        self.dtypes: list[pl.DataType] = []
+        self.json_paths: dict[str, str] = {}
+        self.struct: pl.Struct | None = None
+
     def format_error(self, unparsed: str) -> str:
         """Format the message printed in the exception when an issue occurs.
 
         ```
-        1 │ headers: Struct(
-        2 │     timestamp: Foo
-        ? │                ^^^
+        Tripped on line 2
+
+             1 │ headers: Struct(
+             2 │     timestamp: Foo
+             ? │                ^^^
         ```
 
         Parameters
@@ -343,7 +371,9 @@ class SchemaParser:
 
         Notes
         -----
-        This method is absolutely useless and could be removed.
+        * In most cases this method will look for the first occurrence of the string
+          that raised the exception; and it might not be the _actual_ line that did so.
+        * This method is absolutely useless and could be removed.
         """
         # start/end of the issue
         issue_start = self.source.index(unparsed)
@@ -380,15 +410,23 @@ class SchemaParser:
 
         return msg
 
-    def parse_attr_dtype(self, struct: pl.Struct, name: str, dtype: str) -> pl.Struct:
-        """Parse and register an attribute and its associated datatype.
+    def parse_renamed_attr_dtype(
+        self,
+        struct: pl.Struct,
+        name: str,
+        renamed_to: str,
+        dtype: str,
+    ) -> pl.Struct:
+        """Parse and register an attribute, its new name, and its associated datatype.
 
         Parameters
         ----------
         struct : polars.Struct
             Current state of the `Polars` `Struct`.
         name : str
-            New attribute name.
+            Current attribute name.
+        renamed_to : str
+            New name for the attribute.
         dtype : str
             Expected `Polars` datatype for this attribute.
 
@@ -399,6 +437,8 @@ class SchemaParser:
 
         Raises
         ------
+        : DuplicateColumnError
+            When a column is encountered more than once in the schema.
         : UnknownDataTypeError
             When an unknown/unsupported datatype is encountered.
         """
@@ -408,6 +448,92 @@ class SchemaParser:
 
         dtype = dtype.lower()
         field = pl.Field(name, POLARS_DATATYPES[dtype])
+
+        # add to the lists
+        if dtype not in ("array", "list", "struct"):
+            if renamed_to not in self.columns:
+                self.columns.append(renamed_to)
+                self.dtypes.append(dtype)
+
+                # json path and associated column name
+                path = (
+                    JSON_PATH_SEPARATOR.join(self.record["path"])
+                    .replace("[]", "")
+                    .replace(JSON_PATH_SEPARATOR * 2, JSON_PATH_SEPARATOR)
+                    .rstrip(JSON_PATH_SEPARATOR)
+                )
+                self.json_paths[
+                    f"{path}{JSON_PATH_SEPARATOR}{name}".lstrip(JSON_PATH_SEPARATOR)
+                ] = renamed_to
+            else:
+                raise DuplicateColumnError(self.format_error(renamed_to))
+
+        # renaming part of the json path is not supported (nor needed)
+        else:
+            raise PathRenamingError(renamed_to)
+
+        # keep track of the nested object encountered, or if non-nested add it to the
+        # the current nested object, or the root struct
+        if self.record["parents"]:
+            self.record["structs"][-1].append(field)
+        else:
+            struct.append(field)
+
+        return struct
+
+    def parse_attr_dtype(self, struct: pl.Struct, name: str, dtype: str) -> pl.Struct:
+        """Parse and register an attribute and its associated datatype.
+
+        Parameters
+        ----------
+        struct : polars.Struct
+            Current state of the `Polars` `Struct`.
+        name : str
+            Attribute name.
+        dtype : str
+            Expected `Polars` datatype for this attribute.
+
+        Returns
+        -------
+        : polars.Struct
+            Updated `Polars` `Struct` including the latest parsed addition.
+
+        Raises
+        ------
+        : DuplicateColumnError
+            When a column is encountered more than once in the schema.
+        : UnknownDataTypeError
+            When an unknown/unsupported datatype is encountered.
+        """
+        # sanity check
+        if dtype.lower() not in POLARS_DATATYPES:
+            raise UnknownDataTypeError(self.format_error(dtype))
+
+        dtype = dtype.lower()
+        field = pl.Field(name, POLARS_DATATYPES[dtype])
+
+        # add to the lists
+        if dtype not in ("array", "list", "struct"):
+            if name not in self.columns:
+                self.columns.append(name)
+                self.dtypes.append(dtype)
+
+                # json path and associated column name
+                path = (
+                    JSON_PATH_SEPARATOR.join(self.record["path"])
+                    .replace("[]", "")
+                    .replace(JSON_PATH_SEPARATOR * 2, JSON_PATH_SEPARATOR)
+                    .rstrip(JSON_PATH_SEPARATOR)
+                )
+                self.json_paths[
+                    f"{path}{JSON_PATH_SEPARATOR}{name}".lstrip(JSON_PATH_SEPARATOR)
+                ] = name
+            else:
+                raise DuplicateColumnError(self.format_error(name))
+
+        # add the parent to the current path
+        else:
+            self.record["path"].append(name)
 
         # keep track of the nested object encountered, or if non-nested add it to the
         # the current nested object, or the root struct
@@ -446,6 +572,10 @@ class SchemaParser:
 
         dtype = dtype.lower()
 
+        # add to the path
+        if dtype in ("list", "struct"):
+            self.record["path"].append("[]")
+
         # keep track of the nested object encountered, or if non-nested add it to the
         # the current nested object, or the root struct
         if dtype in ("list", "struct"):
@@ -477,6 +607,10 @@ class SchemaParser:
             Updated `Polars` `Struct` including the latest parsed addition.
         """
         name, dtype = self.record["parents"].pop()
+
+        # remove a parent from the current path
+        if self.record["path"]:
+            self.record["path"].pop()
 
         # list
         if dtype == "list":
@@ -510,7 +644,7 @@ class SchemaParser:
         attribute: Utf8
         nested: Struct(
             foo: Float32
-            bar: Int16
+            bar=bax: Int16
             vector: List[UInt8]
         )
         ```
@@ -530,11 +664,13 @@ class SchemaParser:
 
         The following patterns (recognised via regular expressions) are supported:
 
-        * `([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)` for an attribute name, a column (`:`)
-          and a datatype; for instance `attribute: Utf8` in the example above. Attribute
-          name and datatype must not have spaces and only include alphanumerical or
-          underscore (`_`) characters.
-        * `([A-Za-z0-9_]+)` for a lone datatype; for instance the inner content of the
+        * `([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9]+)` for an attribute
+          name, an equal sign (`=`), a new name for the attribute, a column (`:`) and a
+          datatype. Attribute name and datatype must not have spaces and only include
+          alphanumerical or underscore (`_`) characters.
+        * `([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9]+)` for an attribute name, a column (`:`)
+          and a datatype; for instance `attribute: Utf8` in the example above.
+        * `([A-Za-z0-9]+)` for a lone datatype; for instance the inner content of the
           `List()` in the example above. Keep in mind this datatype could be a complex
           structure as much as a canonical datatype.
         * `[(\[{<]` and its `[)\]}>]` counterpart for opening and closing of nested
@@ -558,13 +694,27 @@ class SchemaParser:
         struct: list[pl.Datatype] = []
 
         # bookkeeping
-        self.record: dict = {"parents": [], "lists": [], "structs": []}
+        self.record: dict = {"lists": [], "parents": [], "path": [], "structs": []}
 
         # continue until everything is parsed
         while s:
-            if (m := re.match(r"([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)", s)) is not None:
+            if (
+                m := re.match(
+                    r"([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9]+)",
+                    s,
+                )
+            ) is not None:
+                struct = self.parse_renamed_attr_dtype(
+                    struct,
+                    m.group(1),
+                    m.group(2),
+                    m.group(3),
+                )
+            elif (
+                m := re.match(r"([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9]+)", s)
+            ) is not None:
                 struct = self.parse_attr_dtype(struct, m.group(1), m.group(2))
-            elif (m := re.match(r"([A-Za-z0-9_]+)", s)) is not None:
+            elif (m := re.match(r"([A-Za-z0-9]+)", s)) is not None:
                 struct = self.parse_lone_dtype(struct, m.group(1))
             elif (m := re.match(r"[(\[{<]", s)) is not None:
                 self.parse_opening_delimiter()
@@ -585,6 +735,14 @@ class SchemaParser:
         self.struct = pl.Struct(struct)
 
         return self.struct
+
+
+class DuplicateColumnError(Exception):
+    """When a column is encountered more than once in the schema."""
+
+
+class PathRenamingError(Exception):
+    """When a parent (in a JSON path sense) is being renamed."""
 
 
 class SchemaParsingError(Exception):

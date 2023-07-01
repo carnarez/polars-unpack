@@ -5,10 +5,7 @@ import json
 import polars as pl
 import pytest
 
-from unpack import SchemaParser, parse_schema, unpack_frame, unpack_ndjson, unpack_text
-
-# TODO test extra/missing fields in the schema
-# TODO test Struct-to-Utf8 casting (to keep a json column as is)
+from unpack import SchemaParser, unpack_frame, unpack_ndjson, unpack_text
 
 
 def test_datatype() -> None:
@@ -151,8 +148,12 @@ def test_list_nested_in_list_nested_in_list() -> None:
 
     assert SchemaParser("text:Utf8,json:List(List(List(Int64)))").to_struct() == dtype
     assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(
-        df.explode("json").explode("json").explode("json"),
+    assert (
+        unpack_frame(df, dtype)
+        .rename({"json.json.json.json": "json"})
+        .frame_equal(
+            df.explode("json").explode("json").explode("json"),
+        )
     )
 
 
@@ -230,17 +231,28 @@ def test_list_nested_in_struct() -> None:
     )
     assert dtype.to_schema() == df.schema
     assert unpack_frame(df, dtype).frame_equal(
-        df.unnest("json").unnest("foo").explode("bar"),
+        df.unnest("json")
+        .unnest("foo")
+        .explode("bar")
+        .rename({"fox": "json.foo.fox", "foz": "json.foo.foz", "bar": "json.bar"}),
     )
+
+
+# TODO
+def test_missing_field_in_schema() -> None:
+    """Test behaviour for [nested] fields that are _not_ described in the schema."""
+    assert False == True
+
+
+# TODO
+def test_missing_field_in_source() -> None:
+    """Test behaviour for [nested] fields that are _not_ present in the source."""
+    assert False == True
 
 
 @pytest.mark.parametrize(
     ("df"),
     [
-        unpack_frame(
-            pl.scan_ndjson("samples/complex.ndjson"),
-            parse_schema("samples/complex.schema"),
-        ).collect(),
         unpack_ndjson("samples/complex.schema", "samples/complex.ndjson").collect(),
         unpack_text("samples/complex.schema", "samples/complex.ndjson").collect(),
     ],
@@ -255,50 +267,50 @@ def test_real_life(df: pl.DataFrame) -> None:
         "headers": {
             "timestamp": 1372182309,
             "source": "Online.Transactions",
-            "offset": 123456789
+            "offset": 123456789,
         },
         "payload": {
             "transaction": "inbound",
             "location": 765,
             "customer": {
                 "type": "REGISTERED",
-                "customerIdentifier": "a8098c1a-f86e-11da-bd1a-00112444be1e"
+                "identifier": "a8098c1a-f86e-11da-bd1a-00112444be1e"
             },
             "lines": [
                 {
                     "product": 76543,
-                    "productDescription": "Toilet plunger",
+                    "description": "Toilet plunger",
                     "quantity": 2,
                     "vatRate": 0.21,
-                    "lineAmount": {
-                        "lineAmountIncludingVat": 10.0,
-                        "lineAmountExcludingVat": 8.26,
-                        "lineAmountVat": 1.74,
-                        "lineAmountCurrency": "EUR"
+                    "amount": {
+                        "includingVat": 10.0,
+                        "excludingVat": 8.26,
+                        "vat": 1.74,
+                        "currency": "EUR"
                     },
                     "discounts": [
                         {
                             "promotion": 100023456000789,
-                            "promotionDescription": "Buy one get two",
-                            "discountAmount": {
-                                "discountAmountIncludingVat": 10.0,
-                                "discountAmountExcludingVat": 8.26,
-                                "discountAmountVat": 1.74,
-                                "discountAmountCurrency": "EUR"
+                            "description": "Buy one get two",
+                            "amount": {
+                                "includingVat": 10.0,
+                                "excludingVat": 8.26,
+                                "vat": 1.74,
+                                "currency": "EUR"
                             }
                         }
                     ]
                 },
                 {
                     "product": 3456,
-                    "productDescription": "Toilet cap",
+                    "description": "Toilet cap",
                     "quantity": 1,
                     "vatRate": 0.21,
-                    "lineAmount": {
-                        "lineAmountIncludingVat": 30.0,
-                        "lineAmountExcludingVat": 24.79,
-                        "lineAmountVat": 5.21,
-                        "lineAmountCurrency": "EUR"
+                    "amount": {
+                        "includingVat": 30.0,
+                        "excludingVat": 24.79,
+                        "vat": 5.21,
+                        "currency": "EUR"
                     }
                 }
             ],
@@ -306,11 +318,11 @@ def test_real_life(df: pl.DataFrame) -> None:
                 "method": "Card",
                 "company": "OnlineBanking",
                 "identifier": 123456789,
-                "totalAmount": {
-                    "totalAmountIncludingVat": 40.0,
-                    "totalAmountExcludingVat": 33.05,
-                    "totalAmountVat": 6.95,
-                    "totalAmountCurrency": "EUR"
+                "amount": {
+                    "includingVat": 40.0,
+                    "excludingVat": 33.05,
+                    "vat": 6.95,
+                    "currency": "EUR"
                 }
             }
         }
@@ -321,52 +333,52 @@ def test_real_life(df: pl.DataFrame) -> None:
 
     ```
     headers: Struct<
-        timestamp: Int64,
-        source: Utf8,
+        timestamp: Int64
+        source: Utf8
         offset: Int64
-    >,
+    >
     payload: Struct<
-        transaction: Utf8,
-        location: Int8,
+        transaction=transaction_type: Utf8
+        location: Int64
         customer: Struct{
-            type: Utf8,
-            registration: Utf8
-        },
+            type=customer_type: Utf8
+            identifier=customer_identifier: Utf8
+        }
         lines: List[
             Struct{
-                product: Int16,
-                productDescription: Utf8,
-                quantity: Int8,
-                vatRate: Float32,
-                lineAmount: Struct(
-                    lineAmountIncludingVat: Float32,
-                    lineAmountExcludingVat: Float32,
-                    lineAmountVat: Float32,
-                    lineAmountCurrency: Utf8
+                product: Int64
+                description=product_description: Utf8
+                quantity: Int64
+                vatRate=vat_rate: Float64
+                amount: Struct(
+                    includingVat=line_amount_including_vat: Float64
+                    excludingVat=line_amount_excluding_vat: Float64
+                    vat=line_amount_vat: Float64
+                    currency=line_amount_currency: Utf8
                 )
                 discounts: List[
                     Struct{
-                        promotion: Int64,
-                        promotionDescription: Utf8,
-                        discountAmount: Struct{
-                            discountAmountIncludingVat: Float32,
-                            discountAmountExcludingVat: Float32,
-                            discountAmountVat: Float32,
-                            discountAmountCurrency: Utf8
+                        promotion: Int64
+                        description=promotion_description: Utf8
+                        amount: Struct{
+                            includingVat=discount_amount_including_vat: Float64
+                            excludingVat=discount_amount_excluding_vat: Float64
+                            vat=discount_amount_vat: Float64
+                            currency=discount_amount_currency: Utf8
                         }
                     }
                 ]
             }
-        ],
+        ]
         payment: Struct{
-            method: Utf8,
-            company: Utf8,
-            transactionIdentifier: Int64,
-            totalAmount: Struct{
-                totalAmountIncludingVat: Float32,
-                totalAmountExcludingVat: Float32,
-                totalAmountVat: Float32,
-                totalAmountCurrency: Utf8
+            method: Utf8
+            company: Utf8
+            identifier=transaction_identifier: Int64
+            amount: Struct{
+                includingVat=total_amount_including_vat: Float64
+                excludingVat=total_amount_excluding_vat: Float64
+                vat=total_amount_vat: Float64
+                currency=total_amount_currency: Utf8
             }
         }
     >
@@ -383,31 +395,31 @@ def test_real_life(df: pl.DataFrame) -> None:
             "timestamp": pl.Int64,
             "source": pl.Utf8,
             "offset": pl.Int64,
-            "transaction": pl.Utf8,
+            "transaction_type": pl.Utf8,
             "location": pl.Int64,
-            "type": pl.Utf8,
-            "customerIdentifier": pl.Utf8,
+            "customer_type": pl.Utf8,
+            "customer_identifier": pl.Utf8,
             "product": pl.Int64,
-            "productDescription": pl.Utf8,
+            "product_description": pl.Utf8,
             "quantity": pl.Int64,
-            "vatRate": pl.Float64,
-            "lineAmountIncludingVat": pl.Float64,
-            "lineAmountExcludingVat": pl.Float64,
-            "lineAmountVat": pl.Float64,
-            "lineAmountCurrency": pl.Utf8,
+            "vat_rate": pl.Float64,
+            "line_amount_including_vat": pl.Float64,
+            "line_amount_excluding_vat": pl.Float64,
+            "line_amount_vat": pl.Float64,
+            "line_amount_currency": pl.Utf8,
             "promotion": pl.Int64,
-            "promotionDescription": pl.Utf8,
-            "discountAmountIncludingVat": pl.Float64,
-            "discountAmountExcludingVat": pl.Float64,
-            "discountAmountVat": pl.Float64,
-            "discountAmountCurrency": pl.Utf8,
+            "promotion_description": pl.Utf8,
+            "discount_amount_including_vat": pl.Float64,
+            "discount_amount_excluding_vat": pl.Float64,
+            "discount_amount_vat": pl.Float64,
+            "discount_amount_currency": pl.Utf8,
             "method": pl.Utf8,
             "company": pl.Utf8,
-            "transactionIdentifier": pl.Int64,
-            "totalAmountIncludingVat": pl.Float64,
-            "totalAmountExcludingVat": pl.Float64,
-            "totalAmountVat": pl.Float64,
-            "totalAmountCurrency": pl.Utf8,
+            "transaction_identifier": pl.Int64,
+            "total_amount_including_vat": pl.Float64,
+            "total_amount_excluding_vat": pl.Float64,
+            "total_amount_vat": pl.Float64,
+            "total_amount_currency": pl.Utf8,
         },
     ).collect()
 
@@ -433,10 +445,10 @@ def test_rename_fields() -> None:
     as described by the following schema:
 
     ```
-    string: Utf8,
-    struct: Struct(
-        fox: Int64,
-        bax: Int64
+    text=string: Utf8,
+    json: Struct(
+        foo=fox: Int64,
+        bar=bax: Int64
     )
     ```
 
@@ -452,6 +464,10 @@ def test_rename_fields() -> None:
     └────────┴─────┴─────┘
     ```
     """
+    # schema parsing
+    schema = SchemaParser("text=string:Utf8,json:Struct(foo=fox:Int64,bar=bax:Int64)")
+    schema.to_struct()
+
     # original dataframe
     dtype = pl.Struct(
         [
@@ -476,7 +492,7 @@ def test_rename_fields() -> None:
         [
             pl.Field("string", pl.Utf8),
             pl.Field(
-                "struct",
+                "json",
                 pl.Struct([pl.Field("fox", pl.Int64), pl.Field("bax", pl.Int64)]),
             ),
         ],
@@ -485,26 +501,15 @@ def test_rename_fields() -> None:
     df_renamed = pl.DataFrame(
         {
             "string": ["foobar"],
-            "struct": [json.loads('{"fox": 0, "bax": 1}')],
+            "json": [json.loads('{"fox": 0, "bax": 1}')],
         },
-        dtype,
+        dtype_renamed,
     )
 
-    # already tested somewhere but hey, won't hurt
     assert (
-        SchemaParser("text:Utf8,json:Struct(foo:Int64,bar:Int64)").to_struct() == dtype
-    )
-    assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(df_renamed.unnest("struct"))
-
-    # test field renaming according to provided schema
-    assert (
-        SchemaParser("string:Utf8,struct:Struct(fox:Int64,bax:Int64)").to_struct()
-        == dtype_renamed
-    )
-    assert dtype_renamed.to_schema() == df_renamed.schema
-    assert unpack_frame(df_renamed, dtype_renamed).frame_equal(
-        df_renamed.unnest("struct"),
+        unpack_frame(df, dtype)
+        .rename(schema.json_paths)
+        .frame_equal(df_renamed.unnest("json"))
     )
 
 
@@ -555,7 +560,9 @@ def test_struct() -> None:
         SchemaParser("text:Utf8,json:Struct(foo:Int64,bar:Int64)").to_struct() == dtype
     )
     assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(df.unnest("json"))
+    assert unpack_frame(df, dtype).frame_equal(
+        df.unnest("json").rename({"foo": "json.foo", "bar": "json.bar"}),
+    )
 
 
 def test_struct_nested_in_list() -> None:
@@ -616,7 +623,11 @@ def test_struct_nested_in_list() -> None:
         == dtype
     )
     assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(df.explode("json").unnest("json"))
+    assert unpack_frame(df, dtype).frame_equal(
+        df.explode("json")
+        .unnest("json")
+        .rename({"foo": "json.foo", "bar": "json.bar"}),
+    )
 
 
 def test_struct_nested_in_struct() -> None:
@@ -702,4 +713,15 @@ def test_struct_nested_in_struct() -> None:
         == dtype
     )
     assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(df.unnest("json").unnest("foo", "bar"))
+    assert unpack_frame(df, dtype).frame_equal(
+        df.unnest("json")
+        .unnest("foo", "bar")
+        .rename(
+            {
+                "fox": "json.foo.fox",
+                "foz": "json.foo.foz",
+                "bax": "json.bar.bax",
+                "baz": "json.bar.baz",
+            },
+        ),
+    )

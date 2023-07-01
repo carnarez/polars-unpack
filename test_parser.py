@@ -7,6 +7,8 @@ import pytest
 
 from unpack import (
     POLARS_DATATYPES,
+    DuplicateColumnError,
+    PathRenamingError,
     SchemaParser,
     SchemaParsingError,
     UnknownDataTypeError,
@@ -160,43 +162,43 @@ def test_real_life() -> None:
             "location": 765,
             "customer": {
                 "type": "REGISTERED",
-                "customerIdentifier": "a8098c1a-f86e-11da-bd1a-00112444be1e"
+                "identifier": "a8098c1a-f86e-11da-bd1a-00112444be1e"
             },
             "lines": [
                 {
                     "product": 76543,
-                    "productDescription": "Toilet plunger",
+                    "description": "Toilet plunger",
                     "quantity": 2,
                     "vatRate": 0.21,
-                    "lineAmount": {
-                        "lineAmountIncludingVat": 10.0,
-                        "lineAmountExcludingVat": 8.26,
-                        "lineAmountVat": 1.74,
-                        "lineAmountCurrency": "EUR"
+                    "amount": {
+                        "includingVat": 10.0,
+                        "excludingVat": 8.26,
+                        "vat": 1.74,
+                        "currency": "EUR"
                     },
                     "discounts": [
                         {
                             "promotion": 100023456000789,
-                            "promotionDescription": "Buy one get two",
-                            "discountAmount": {
-                                "discountAmountIncludingVat": 10.0,
-                                "discountAmountExcludingVat": 8.26,
-                                "discountAmountVat": 1.74,
-                                "discountAmountCurrency": "EUR"
+                            "description": "Buy one get two",
+                            "amount": {
+                                "includingVat": 10.0,
+                                "excludingVat": 8.26,
+                                "vat": 1.74,
+                                "currency": "EUR"
                             }
                         }
                     ]
                 },
                 {
                     "product": 3456,
-                    "productDescription": "Toilet cap",
+                    "description": "Toilet cap",
                     "quantity": 1,
                     "vatRate": 0.21,
-                    "lineAmount": {
-                        "lineAmountIncludingVat": 30.0,
-                        "lineAmountExcludingVat": 24.79,
-                        "lineAmountVat": 5.21,
-                        "lineAmountCurrency": "EUR"
+                    "amount": {
+                        "includingVat": 30.0,
+                        "excludingVat": 24.79,
+                        "vat": 5.21,
+                        "currency": "EUR"
                     }
                 }
             ],
@@ -204,11 +206,11 @@ def test_real_life() -> None:
                 "method": "Card",
                 "company": "OnlineBanking",
                 "identifier": 123456789,
-                "totalAmount": {
-                    "totalAmountIncludingVat": 40.0,
-                    "totalAmountExcludingVat": 33.05,
-                    "totalAmountVat": 6.95,
-                    "totalAmountCurrency": "EUR"
+                "amount": {
+                    "includingVat": 40.0,
+                    "excludingVat": 33.05,
+                    "vat": 6.95,
+                    "currency": "EUR"
                 }
             }
         }
@@ -219,58 +221,58 @@ def test_real_life() -> None:
 
     ```
     headers: Struct<
-        timestamp: Int64,
-        source: Utf8,
+        timestamp: Int64
+        source: Utf8
         offset: Int64
-    >,
+    >
     payload: Struct<
-        transaction: Utf8,
-        location: Int8,
+        transaction=transaction_type: Utf8
+        location: Int64
         customer: Struct{
-            type: Utf8,
-            registration: Utf8
-        },
+            type=customer_type: Utf8
+            identifier=customer_identifier: Utf8
+        }
         lines: List[
             Struct{
-                product: Int16,
-                productDescription: Utf8,
-                quantity: Int8,
-                vatRate: Float32,
-                lineAmount: Struct(
-                    lineAmountIncludingVat: Float32,
-                    lineAmountExcludingVat: Float32,
-                    lineAmountVat: Float32,
-                    lineAmountCurrency: Utf8
+                product: Int64
+                description=product_description: Utf8
+                quantity: Int64
+                vatRate=vat_rate: Float64
+                amount: Struct(
+                    includingVat=line_amount_including_vat: Float64
+                    excludingVat=line_amount_excluding_vat: Float64
+                    vat=line_amount_vat: Float64
+                    currency=line_amount_currency: Utf8
                 )
                 discounts: List[
                     Struct{
-                        promotion: Int64,
-                        promotionDescription: Utf8,
-                        discountAmount: Struct{
-                            discountAmountIncludingVat: Float32,
-                            discountAmountExcludingVat: Float32,
-                            discountAmountVat: Float32,
-                            discountAmountCurrency: Utf8
+                        promotion: Int64
+                        description=promotion_description: Utf8
+                        amount: Struct{
+                            includingVat=discount_amount_including_vat: Float64
+                            excludingVat=discount_amount_excluding_vat: Float64
+                            vat=discount_amount_vat: Float64
+                            currency=discount_amount_currency: Utf8
                         }
                     }
                 ]
             }
-        ],
+        ]
         payment: Struct{
-            method: Utf8,
-            company: Utf8,
-            transactionIdentifier: Int64,
-            totalAmount: Struct{
-                totalAmountIncludingVat: Float32,
-                totalAmountExcludingVat: Float32,
-                totalAmountVat: Float32,
-                totalAmountCurrency: Utf8
+            method: Utf8
+            company: Utf8
+            identifier=transaction_identifier: Int64
+            amount: Struct{
+                includingVat=total_amount_including_vat: Float32
+                excludingVat=total_amount_excluding_vat: Float32
+                vat=total_amount_vat: Float32
+                currency=total_amount_currency: Utf8
             }
         }
     >
     ```
     """
-    dtype = parse_schema("samples/complex.schema")
+    dtype = parse_schema("samples/complex.schema").struct
     df = pl.scan_ndjson("samples/complex.ndjson").collect()
 
     assert dtype.to_schema() == df.schema
@@ -328,6 +330,20 @@ def test_struct_nested_in_struct() -> None:
     assert SchemaParser("Struct(foo: Struct(bar: Int8))").to_struct() == struct
 
 
+def test_unexpected_duplication() -> None:
+    """Test for duplicated column name (including after column renaming)."""
+    with pytest.raises(DuplicateColumnError):
+        SchemaParser("Struct(foo: Int8, foo: Float32)").to_struct()
+    with pytest.raises(DuplicateColumnError):
+        SchemaParser("Struct(foo: Int8, bar=foo: Float32)").to_struct()
+
+
+def test_unexpected_renaming() -> None:
+    """Test for JSON path renaming (unsupported, and quite useless as well)."""
+    with pytest.raises(PathRenamingError):
+        SchemaParser("this=that:Struct(foo:Int8)").to_struct()
+
+
 def test_unexpected_syntax() -> None:
     """Test for failure to parse the schema due to unknown/unexpected syntax."""
     with pytest.raises(SchemaParsingError):
@@ -342,3 +358,5 @@ def test_unknown_datatype() -> None:
         SchemaParser("Foo").to_struct()
     with pytest.raises(UnknownDataTypeError):
         SchemaParser("Struct(foo: Bar)").to_struct()
+    with pytest.raises(UnknownDataTypeError):
+        SchemaParser("Struct(foo=fox: Bar)").to_struct()

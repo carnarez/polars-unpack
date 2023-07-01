@@ -22,7 +22,7 @@ A few extra points:
 - It seems `Polars` only accepts input starting with `{`, but not `[` (such as a JSON
   list); although it _is_ valid in a JSON sense...
 
-The current ~~working~~ state of this little DIY can be checked (in `Docker`) via:
+The current working state of this little DIY can be checked (in `Docker`) via:
 
 ```shell
 $ make env
@@ -68,6 +68,10 @@ Feel free to extend the functionalities to your own use case.
 
 - [`SchemaParser`](#unpackschemaparser): Parse a plain text JSON schema into a `Polars`
   `Struct`.
+- [`DuplicateColumnError`](#unpackduplicatecolumnerror): When a column is encountered
+  more than once in the schema.
+- [`PathRenamingError`](#unpackpathrenamingerror): When a parent (in a JSON path sense)
+  is being renamed.
 - [`SchemaParsingError`](#unpackschemaparsingerror): When unexpected content is
   encountered and cannot be parsed.
 - [`UnknownDataTypeError`](#unpackunknowndatatypeerror): When an unknown/unsupported
@@ -135,6 +139,7 @@ Parse a plain text JSON schema into a `Polars` `Struct`.
 unpack_frame(
     df: pl.DataFrame | pl.LazyFrame,
     dtype: pl.DataType,
+    json_path: str = "",
     column: str | None = None,
 ) -> pl.DataFrame | pl.LazyFrame:
 ```
@@ -147,6 +152,7 @@ Unpack a \[nested\] JSON into a `Polars` `DataFrame` or `LazyFrame` given a sche
   `LazyFrame`) object.
 - `dtype` \[`polars.DataType`\]: Datatype of the current object (`polars.Array`,
   `polars.List` or `polars.Struct`).
+- `json_path` \[`str`\]: Full JSON path (_aka_ breadcrumbs) to the current field.
 - `column` \[`str | None`\]: Column to apply the unpacking on; defaults to `None`. This
   is used when the current object has children but no field name; this is the case for
   convoluted `polars.List` within a `polars.List` for instance.
@@ -158,8 +164,10 @@ Unpack a \[nested\] JSON into a `Polars` `DataFrame` or `LazyFrame` given a sche
 
 **Notes**
 
-The `polars.Array` is considered the \[obsolete\] ancestor of `polars.List` and expected
-to behave identically.
+- The `polars.Array` is considered the \[obsolete\] ancestor of `polars.List` and
+  expected to behave identically.
+- Each unpacked column will be renamed as their full JSON path to avoid potential
+  identical names.
 
 ### `unpack.unpack_ndjson`
 
@@ -216,6 +224,8 @@ Parse a plain text JSON schema into a `Polars` `Struct`.
 
 - [`format_error()`](#unpackschemaparserformat_error): Format the message printed in the
   exception when an issue occurs.
+- [`parse_renamed_attr_dtype()`](#unpackschemaparserparse_renamed_attr_dtype): Parse and
+  register an attribute, its new name, and its associated datatype.
 - [`parse_attr_dtype()`](#unpackschemaparserparse_attr_dtype): Parse and register an
   attribute and its associated datatype.
 - [`parse_lone_dtype()`](#unpackschemaparserparse_lone_dtype): Parse and register a
@@ -242,6 +252,11 @@ Instantiate the object.
 
 **Attributes**
 
+- `columns` \[`list[str]`\]: Expected list of columns in the final `Polars` `DataFrame`
+  or `LazyFrame`.
+- `dtypes` \[`list[polars.DataType]`\]: Expected list of datatypes in the final `Polars`
+  `DataFrame` or `LazyFrame`.
+- `json_paths` \[`dit[str, str]`\]: Dictionary of JSON path -> column name pairs.
 - `source` \[`str`\]: JSON schema described in plain text, using `Polars` datatypes.
 - `struct` \[`polars.Struct`\]: Plain text schema parsed as a `Polars` `Struct`.
 
@@ -256,9 +271,11 @@ format_error(unparsed: str) -> str:
 Format the message printed in the exception when an issue occurs.
 
 ```
-1 │ headers: Struct(
-2 │     timestamp: Foo
-? │                ^^^
+Tripped on line 2
+
+     1 │ headers: Struct(
+     2 │     timestamp: Foo
+     ? │                ^^^
 ```
 
 **Parameters**
@@ -272,7 +289,38 @@ Format the message printed in the exception when an issue occurs.
 
 **Notes**
 
-This method is absolutely useless and could be removed.
+- In most cases this method will look for the first occurrence of the string that raised
+  the exception; and it might not be the _actual_ line that did so.
+- This method is absolutely useless and could be removed.
+
+##### `unpack.SchemaParser.parse_renamed_attr_dtype`
+
+```python
+parse_renamed_attr_dtype(
+    struct: pl.Struct,
+    name: str,
+    renamed_to: str,
+    dtype: str,
+) -> pl.Struct:
+```
+
+Parse and register an attribute, its new name, and its associated datatype.
+
+**Parameters**
+
+- `struct` \[`polars.Struct`\]: Current state of the `Polars` `Struct`.
+- `name` \[`str`\]: Current attribute name.
+- `renamed_to` \[`str`\]: New name for the attribute.
+- `dtype` \[`str`\]: Expected `Polars` datatype for this attribute.
+
+**Returns**
+
+- \[`polars.Struct`\]: Updated `Polars` `Struct` including the latest parsed addition.
+
+**Raises**
+
+- \[`DuplicateColumnError`\]: When a column is encountered more than once in the schema.
+- \[`UnknownDataTypeError`\]: When an unknown/unsupported datatype is encountered.
 
 ##### `unpack.SchemaParser.parse_attr_dtype`
 
@@ -285,7 +333,7 @@ Parse and register an attribute and its associated datatype.
 **Parameters**
 
 - `struct` \[`polars.Struct`\]: Current state of the `Polars` `Struct`.
-- `name` \[`str`\]: New attribute name.
+- `name` \[`str`\]: Attribute name.
 - `dtype` \[`str`\]: Expected `Polars` datatype for this attribute.
 
 **Returns**
@@ -294,6 +342,7 @@ Parse and register an attribute and its associated datatype.
 
 **Raises**
 
+- \[`DuplicateColumnError`\]: When a column is encountered more than once in the schema.
 - \[`UnknownDataTypeError`\]: When an unknown/unsupported datatype is encountered.
 
 ##### `unpack.SchemaParser.parse_lone_dtype`
@@ -355,7 +404,7 @@ We expect something as follows:
 attribute: Utf8
 nested: Struct(
     foo: Float32
-    bar: Int16
+    bar=bax: Int16
     vector: List[UInt8]
 )
 ```
@@ -375,11 +424,13 @@ polars.Struct([
 
 The following patterns (recognised via regular expressions) are supported:
 
-- `([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)` for an attribute name, a column (`:`) and a
-  datatype; for instance `attribute: Utf8` in the example above. Attribute name and
-  datatype must not have spaces and only include alphanumerical or underscore (`_`)
-  characters.
-- `([A-Za-z0-9_]+)` for a lone datatype; for instance the inner content of the `List()`
+- `([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9]+)` for an attribute name, an
+  equal sign (`=`), a new name for the attribute, a column (`:`) and a datatype.
+  Attribute name and datatype must not have spaces and only include alphanumerical or
+  underscore (`_`) characters.
+- `([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9]+)` for an attribute name, a column (`:`) and a
+  datatype; for instance `attribute: Utf8` in the example above.
+- `([A-Za-z0-9]+)` for a lone datatype; for instance the inner content of the `List()`
   in the example above. Keep in mind this datatype could be a complex structure as much
   as a canonical datatype.
 - `[(\[{<]` and its `[)\]}>]` counterpart for opening and closing of nested datatypes.
@@ -396,6 +447,26 @@ file is reached or a `SchemaParsingError` exception is raised.
 **Raises**
 
 - \[`SchemaParsingError`\]: When unexpected content is encountered and cannot be parsed.
+
+### `unpack.DuplicateColumnError`
+
+When a column is encountered more than once in the schema.
+
+#### Constructor
+
+```python
+DuplicateColumnError()
+```
+
+### `unpack.PathRenamingError`
+
+When a parent (in a JSON path sense) is being renamed.
+
+#### Constructor
+
+```python
+PathRenamingError()
+```
 
 ### `unpack.SchemaParsingError`
 
