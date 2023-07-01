@@ -2,7 +2,7 @@
     "headers": {
         "timestamp": 1372182309,
         "source": "Online.Transactions",
-        "offset": 123456789,
+        "offset": 123456789
     },
     "payload": {
         "transaction": "inbound",

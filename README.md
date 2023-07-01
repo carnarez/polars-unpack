@@ -186,6 +186,12 @@ Lazily scan and unpack newline-delimited JSON file given a `Polars` schema.
 
 - \[`polars.LazyFrame`\]: Unpacked JSON content, lazy style.
 
+**Notes**
+
+- Fields described in the schema but absent from the JSON source will be added as `null`
+  values.
+- Fields prenset in the JSON source but absent from the schema will be dropped.
+
 ### `unpack.unpack_text`
 
 ```python
