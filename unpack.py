@@ -1,5 +1,7 @@
 """Automatic JSON unpacking to [`Polars`](https://pola.rs) `DataFrame`.
 
+> _Welcome to my little experiment._
+
 The use case is as follows:
 
 * Provide a schema written in plain text describing the JSON content, to be converted
@@ -217,8 +219,8 @@ def unpack_frame(
     -----
     * The `polars.Array` is considered the [obsolete] ancestor of `polars.List` and
       expected to behave identically.
-    * Each unpacked column will be renamed as their full JSON path to avoid potential
-      identical names.
+    * Unpacked columns will be renamed as their full respective JSON paths to avoid
+      potential identical names.
     """
     # if we are dealing with a nesting column
     if column is not None:
@@ -267,7 +269,7 @@ def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
     -----
     * Fields described in the schema but absent from the JSON source will be added as
       `null` values.
-    * Fields prenset in the JSON source but absent from the schema will be dropped.
+    * Fields present in the JSON source but absent from the schema will be dropped.
     """
     sp = parse_schema(path_schema)
 
@@ -311,9 +313,9 @@ def unpack_text(path_schema: str, path_data: str, separator: str = "|") -> pl.La
     Notes
     -----
     This is mostly a test, to verify the output would be identical, as this unpacking
-    use case could be applied on a CSV column containing some JSON content for isntance.
-    The preferred way for native JSON content remains to use the `unpack_ndjson()`
-    function defined in this same script.
+    use case could be applied on a CSV column containing some JSON content for instance.
+    The preferred way for native JSON content remains the `unpack_ndjson()` function
+    defined in this same script.
     """
     sp = parse_schema(path_schema)
 

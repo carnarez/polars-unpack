@@ -2,6 +2,8 @@
 
 Automatic JSON unpacking to [`Polars`](https://pola.rs) `DataFrame`.
 
+> _Welcome to my little experiment._
+
 The use case is as follows:
 
 - Provide a schema written in plain text describing the JSON content, to be converted
@@ -166,8 +168,8 @@ Unpack a \[nested\] JSON into a `Polars` `DataFrame` or `LazyFrame` given a sche
 
 - The `polars.Array` is considered the \[obsolete\] ancestor of `polars.List` and
   expected to behave identically.
-- Each unpacked column will be renamed as their full JSON path to avoid potential
-  identical names.
+- Unpacked columns will be renamed as their full respective JSON paths to avoid
+  potential identical names.
 
 ### `unpack.unpack_ndjson`
 
@@ -190,7 +192,7 @@ Lazily scan and unpack newline-delimited JSON file given a `Polars` schema.
 
 - Fields described in the schema but absent from the JSON source will be added as `null`
   values.
-- Fields prenset in the JSON source but absent from the schema will be dropped.
+- Fields present in the JSON source but absent from the schema will be dropped.
 
 ### `unpack.unpack_text`
 
@@ -216,9 +218,9 @@ Lazily scan and unpack JSON data read as plain text, given a `Polars` schema.
 **Notes**
 
 This is mostly a test, to verify the output would be identical, as this unpacking use
-case could be applied on a CSV column containing some JSON content for isntance. The
-preferred way for native JSON content remains to use the `unpack_ndjson()` function
-defined in this same script.
+case could be applied on a CSV column containing some JSON content for instance. The
+preferred way for native JSON content remains the `unpack_ndjson()` function defined in
+this same script.
 
 ## Classes
 
