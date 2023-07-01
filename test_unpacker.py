@@ -185,7 +185,7 @@ def test_list_nested_in_struct() -> None:
     json: Struct(
         foo: Struct(
             fox: Int64,
-            bax: Int64
+            foz: Int64
         ),
         bar: List(Int64)
     )
@@ -238,10 +238,47 @@ def test_list_nested_in_struct() -> None:
     )
 
 
-# TODO
 def test_missing_field_in_schema() -> None:
-    """Test behaviour for [nested] fields that are _not_ described in the schema."""
-    assert False == True
+    """Test behaviour for [nested] fields that are _not_ described in the schema.
+
+    Test the following nested JSON content:
+
+    ```json
+    {
+        "json": {
+           "foo": 0,
+           "bar": 1
+        }
+    }
+    ```
+
+    as described by the following schema:
+
+    ```
+    json: Struct(foo: Int64)
+    ```
+
+    which is missing a field.
+    """
+    dtype = pl.Struct(
+        [
+            pl.Field(
+                "json",
+                pl.Struct(
+                    [pl.Field("foo", pl.Int64)],
+                ),
+            ),
+        ],
+    )
+
+    df = pl.DataFrame({"json": [json.loads('{"foo": 0, "bar": 1}')]})
+    df_dtyped = pl.DataFrame({"json": [json.loads('{"foo": 0, "bar": 1}')]}, dtype)
+
+    assert SchemaParser("json:Struct(foo:Int64)").to_struct() == dtype
+    assert dtype.to_schema() != df.schema
+    assert unpack_frame(df_dtyped, dtype).frame_equal(
+        df.unnest("json").drop("bar").rename({"foo": "json.foo"})
+    )
 
 
 # TODO
