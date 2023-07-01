@@ -15,7 +15,7 @@ A few extra points:
 - The schema should be dominant and we should rename fields as they are being unpacked
   to avoid identical names for different columns (which is forbidden by `Polars` for
   obvious reasons).
-- _Why not using the inferred schema?_ Because at times we need to provide fields that
+- Why not using the inferred schema? Because at times we need to provide fields that
   might _not_ be in the JSON file to fit a certain data structure, or simply ignore part
   of the JSON data when unpacking to avoid wasting resources. Oh, and to rename fields
   too.

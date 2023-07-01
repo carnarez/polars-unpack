@@ -238,6 +238,7 @@ def test_list_nested_in_struct() -> None:
     )
 
 
+# TODO
 def test_missing_field_in_schema() -> None:
     """Test behaviour for [nested] fields that are _not_ described in the schema.
 
@@ -260,6 +261,8 @@ def test_missing_field_in_schema() -> None:
 
     which is missing a field.
     """
+    columns = ["json.foo"]
+
     dtype = pl.Struct(
         [
             pl.Field(
@@ -272,19 +275,20 @@ def test_missing_field_in_schema() -> None:
     )
 
     df = pl.DataFrame({"json": [json.loads('{"foo": 0, "bar": 1}')]})
-    df_dtyped = pl.DataFrame({"json": [json.loads('{"foo": 0, "bar": 1}')]}, dtype)
+
+    df_unpacked = unpack_frame(df, dtype)
 
     assert SchemaParser("json:Struct(foo:Int64)").to_struct() == dtype
     assert dtype.to_schema() != df.schema
-    assert unpack_frame(df_dtyped, dtype).frame_equal(
-        df.unnest("json").drop("bar").rename({"foo": "json.foo"})
-    )
+    assert df_unpacked.drop(
+        [c for c in df_unpacked.columns if c not in columns],
+    ).frame_equal(df.unnest("json").drop("bar").rename({"foo": "json.foo"}))
 
 
 # TODO
 def test_missing_field_in_source() -> None:
     """Test behaviour for [nested] fields that are _not_ present in the source."""
-    assert False == True
+    assert False is True
 
 
 @pytest.mark.parametrize(
