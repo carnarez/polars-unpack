@@ -281,7 +281,7 @@ def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
 
     # add missing columns
     df = df.with_columns(
-        [pl.lit(None).alias(p) for p in sp.json_paths.keys() if p not in df.columns]
+        [pl.lit(None).alias(p) for p in sp.json_paths if p not in df.columns],
     )
 
     # rename fields (otherwise renamed to their full json paths)
@@ -336,7 +336,7 @@ def unpack_text(path_schema: str, path_data: str, separator: str = "|") -> pl.La
 
     # add missing columns
     df = df.with_columns(
-        [pl.lit(None).alias(p) for p in sp.json_paths.keys() if p not in df.columns]
+        [pl.lit(None).alias(p) for p in sp.json_paths if p not in df.columns],
     )
 
     # rename fields (otherwise renamed to their full json paths)
