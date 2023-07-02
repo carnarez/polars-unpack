@@ -11,16 +11,15 @@ FLAGS = --rm \
         --volume $(PWD)/unpack.py:/usr/src/unpack.py \
         --workdir /usr/src
 
-build:
-	@docker build --tag polars-json .
+env:
+	@docker build --tag polars-unpack .
+	@docker run --interactive $(FLAGS) polars-unpack /bin/bash
 
-env: build
-	@docker run --interactive $(FLAGS) polars-json /bin/bash
-
-test: build
+test:
+	@docker build --tag polars-unpack/tests tests
 	@docker run --env COLUMNS=$(COLUMNS) \
 	            $(FLAGS) \
-	            polars-json \
+	            polars-unpack/tests \
 	                python -m pytest --capture=no \
 	                                 --color=yes \
 	                                 --cov=unpack \
@@ -30,4 +29,4 @@ test: build
 	                                 --verbose
 
 clean:
-	-@rm -fr __pycache__ */__pycache__
+	-@rm -fr $$(find . -name __pycache__)
