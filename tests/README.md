@@ -1,3 +1,7 @@
+# Module `__init__`
+
+Thorough(-ish) battery of tests for our little unpacking stunt.
+
 # Module `test_parser`
 
 Assert capabilities of the schema parser.

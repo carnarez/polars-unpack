@@ -1,16 +1,14 @@
-"""Automatic JSON unpacking to [`Polars`](https://pola.rs) `DataFrame`.
+"""Automatic JSON unpacking to [`Polars`](https://pola.rs) `DataFrame` or `LazyFrame`.
 
-> _Welcome to my little experiment._
-
-![](/logos/py-polars.png) ![](/logos/py-polars-unpacked.png)
+![](https://raw.githubusercontent.com/carnarez/polars-unpack/master/logos/py-polars-unpacked.png)
 
 The use case is as follows:
 
-* Provide a schema written in plain text describing the JSON content, to be converted
-  into a `Polars` `Struct` (see samples in this repo for examples).
-* Read the JSON content, as plain text using `scan_csv()` for instance, or directly as
-  JSON via `scan_ndjson()`  (spoiler: the latter is better suited for our needs in the
-  current `Polars` implementation) and automagically unpack the nested content by
+* Provide a schema written in plain text describing some JSON content, to be converted
+  into a `Polars` `Struct` (see [samples](/samples) in this repo for examples).
+* Read said JSON content, as plain text using `scan_csv()` for instance, or directly as
+  JSON via `scan_ndjson()` (_spoiler: the former is better suited for our needs in the
+  current_ `Polars` _implementation_) and automagically unpack the nested content by
   processing the schema.
 
 A few extra points:
@@ -18,12 +16,10 @@ A few extra points:
 * The schema should be dominant and we should rename fields as they are being unpacked
   to avoid identical names for different columns (which is forbidden by `Polars` for
   obvious reasons).
-* Why not using the inferred schema? Because at times we need to provide fields that
-  might _not_ be in the JSON file to fit a certain data structure, or simply ignore
+* _But why not using the inferred schema?_ Because at times we need to provide fields
+  that might _not_ be in the JSON file to fit a certain data structure, or simply ignore
   part of the JSON data when unpacking to avoid wasting resources. Oh, and to rename
   fields too.
-* It seems `Polars` only accepts input starting with `{`, but not `[` (such as a JSON
-  list); although it _is_ valid in a JSON sense...
 
 The current working state of this little DIY can be checked (in `Docker`) via:
 
@@ -395,7 +391,7 @@ class SchemaParser:
         Parameters
         ----------
         unparsed : str
-            State of the unparsed JSON schema; the issue is expected at the first line.
+            Unexpected string that raised the exception.
 
         Returns
         -------
