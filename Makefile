@@ -28,4 +28,4 @@ test: build
 	                                 --verbose
 
 clean:
-	-@rm -fr __pycache__
+	-@rm -fr __pycache__ */__pycache__

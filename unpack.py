@@ -2,13 +2,16 @@
 
 > _Welcome to my little experiment._
 
+![](/logos/py-polars.png) ![](/logos/py-polars-unpacked.png)
+
 The use case is as follows:
 
 * Provide a schema written in plain text describing the JSON content, to be converted
   into a `Polars` `Struct` (see samples in this repo for examples).
-* Read the JSON content (as plain text using `scan_csv()` for instance, or directly as
-  JSON via `scan_ndjson()`) and automagically unpack the nested content by processing
-  the schema.
+* Read the JSON content, as plain text using `scan_csv()` for instance, or directly as
+  JSON via `scan_ndjson()`  (spoiler: the latter is better suited for our needs in the
+  current `Polars` implementation) and automagically unpack the nested content by
+  processing the schema.
 
 A few extra points:
 
