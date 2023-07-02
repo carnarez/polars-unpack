@@ -209,7 +209,7 @@ Lazily scan and unpack JSON data read as plain text, given a `Polars` schema.
 - `separator` \[`str`\]: Separator to use when parsing the JSON file as a CSV; defaults
   to `|` but `#` or `$` could be good candidates too. Note this separator should \*NOT\*
   be present in the file at all (`,` or `:` are thus out of scope given the JSON
-  context).
+  context). Otherwise... UTF-8 characters?
 
 **Returns**
 
@@ -221,6 +221,11 @@ This is mostly a test, to verify the output would be identical, as this unpackin
 case could be applied on a CSV column containing some JSON content for instance. The
 preferred way for native JSON content remains the `unpack_ndjson()` function defined in
 this same script.
+
+In the current `Polars` implementation this function is however better suited for the
+use case: the provided schema is always dominant, regardless of the content of the JSON
+file. We do not need to add or remove missing or supplementary columns, everything is
+taken care of by the `json_extract()` method.
 
 ## Classes
 

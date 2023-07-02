@@ -281,7 +281,11 @@ def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
 
     # add missing columns
     df = df.with_columns(
-        [pl.lit(None).alias(p) for p in sp.json_paths if p not in df.columns],
+        [
+            pl.lit(None).cast(d).alias(p)
+            for p, d in zip(sp.json_paths.keys(), sp.dtypes, strict=True)
+            if p not in df.columns
+        ],
     )
 
     # rename fields (otherwise renamed to their full json paths)
@@ -304,6 +308,7 @@ def unpack_text(path_schema: str, path_data: str, separator: str = "|") -> pl.La
         Separator to use when parsing the JSON file as a CSV; defaults to `|` but `#` or
         `$` could be good candidates too. Note this separator should \*NOT\* be present
         in the file at all (`,` or `:` are thus out of scope given the JSON context).
+        Otherwise... UTF-8 characters?
 
     Returns
     -------
@@ -316,6 +321,11 @@ def unpack_text(path_schema: str, path_data: str, separator: str = "|") -> pl.La
     use case could be applied on a CSV column containing some JSON content for instance.
     The preferred way for native JSON content remains the `unpack_ndjson()` function
     defined in this same script.
+
+    In the current `Polars` implementation this function is however better suited for
+    the use case: the provided schema is always dominant, regardless of the content of
+    the JSON file. We do not need to add or remove missing or supplementary columns,
+    everything is taken care of by the `json_extract()` method.
     """
     sp = parse_schema(path_schema)
 
@@ -331,19 +341,9 @@ def unpack_text(path_schema: str, path_data: str, separator: str = "|") -> pl.La
         .unnest("json")
     )
 
-    # unpack object
-    df = unpack_frame(df, sp.struct)
-
-    # add missing columns
-    df = df.with_columns(
-        [pl.lit(None).alias(p) for p in sp.json_paths if p not in df.columns],
-    )
-
-    # rename fields (otherwise renamed to their full json paths)
-    df = df.rename(sp.json_paths)
-
-    # final selection (drop extra/unwanted columns)
-    return df.select(sp.columns)
+    # unpack object and rename fields (otherwise renamed to their full json paths)
+    # no other transformations are necessary as the schema is already dominant here
+    return unpack_frame(df, sp.struct).rename(sp.json_paths)
 
 
 class SchemaParser:
@@ -483,7 +483,7 @@ class SchemaParser:
         if dtype not in ("array", "list", "struct"):
             if renamed_to not in self.columns:
                 self.columns.append(renamed_to)
-                self.dtypes.append(dtype)
+                self.dtypes.append(POLARS_DATATYPES[dtype])
 
                 # json path and associated column name
                 path = (
@@ -546,7 +546,7 @@ class SchemaParser:
         if dtype not in ("array", "list", "struct"):
             if name not in self.columns:
                 self.columns.append(name)
-                self.dtypes.append(dtype)
+                self.dtypes.append(POLARS_DATATYPES[dtype])
 
                 # json path and associated column name
                 path = (
@@ -787,9 +787,9 @@ if __name__ == "__main__":
     # infer schema from ndjson
     if len(sys.argv[1:]) == 1 and sys.argv[1].endswith("ndjson"):
         sys.stdout.write(f"{infer_schema(sys.argv[1])}\n")
-    # unpack ndjson given a schema
+    # unpack ndjson given a schema; at the end as plain text fits the use case better...
     elif len(sys.argv[1:]) == 2:
-        sys.stdout.write(f"{unpack_ndjson(sys.argv[1], sys.argv[2]).fetch(3)}\n")
+        sys.stdout.write(f"{unpack_text(sys.argv[1], sys.argv[2]).fetch(3)}\n")
     # usage
     else:
         sys.stderr.write(f"Usage: python3.1X {sys.argv[0]} <SCHEMA> <NDJSON>\n")
