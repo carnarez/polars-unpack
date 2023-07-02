@@ -9,19 +9,60 @@ The use case is as follows:
 - Provide a schema written in plain text describing some JSON content, to be converted
   into a `Polars` `Struct` (see [samples](/samples) in this repo for examples).
 - Read said JSON content, as plain text using `scan_csv()` for instance, or directly as
-  JSON via `scan_ndjson()` (_spoiler: the former is better suited for our needs in the
-  current_ `Polars` _implementation_) and automagically unpack the nested content by
-  processing the schema.
+  JSON via `scan_ndjson()` and automagically unpack the nested content by processing the
+  schema (_spoiler: the plain text way is better suited for our needs in the current_
+  `Polars` _implementation_).
 
 A few extra points:
 
 - The schema should be dominant and we should rename fields as they are being unpacked
   to avoid identical names for different columns (which is forbidden by `Polars` for
   obvious reasons).
-- _But why not using the inferred schema?_ Because at times we need to provide fields
-  that might _not_ be in the JSON file to fit a certain data structure, or simply ignore
+- _But why not simply using the inferred schema?_ Because at times we need to provide
+  fields that might _not_ be in the JSON file to fit a certain data structure, or ignore
   part of the JSON data when unpacking to avoid wasting resources. Oh, and to rename
   fields too.
+
+The requirements are illustrated below (JSON input, plain text schema, `Polars` output):
+
+```json
+{
+    "column": "content",
+    "nested": [
+        {
+            "attr": 0,
+            "attr2": 2
+        },
+        {
+            "attr": 1,
+            "attr2": 3
+        }
+    ],
+    "omitted_in_schema": "ignored"
+}
+```
+
+```
+column: Utf8
+nested: List(
+    Struct(
+        attr: UInt8
+        attr2=renamed: UInt8
+    )
+)
+missing_from_source: Float32
+```
+
+```
+┌─────────┬──────┬─────────┬─────────────────────┐
+│ column  ┆ attr ┆ renamed ┆ missing_from_source │
+│ ---     ┆ ---  ┆ ---     ┆ ---                 │
+│ str     ┆ ui8  ┆ ui8     ┆ f32                 │
+╞═════════╪══════╪═════════╪═════════════════════╡
+│ content ┆ 0    ┆ 2       ┆ null                │
+│ content ┆ 1    ┆ 3       ┆ null                │
+└─────────┴──────┴─────────┴─────────────────────┘
+```
 
 The current working state of this little DIY can be checked (in `Docker`) via:
 
@@ -30,7 +71,7 @@ $ make env
 > python unpack.py samples/complex.schema samples/complex.ndjson
 ```
 
-Note that a call of the same script _without_ providing a schema returns a
+Note that a call to the same script _without_ providing a schema returns a
 representation of the latter as _inferred_ by `Polars` (works as an example of the
 syntax used to describe things in plain text):
 
@@ -50,8 +91,8 @@ Although testing various functionalities, these tests are pretty independent. Bu
 ([schema](/samples/complex.schema) & [data](/samples/complex.ndjson)) are there to check
 if this is only fantasy. Running is convincing!
 
-Could make this `pip`-installable on request. Feel free to extend the functionalities to
-your own use case.
+Could make this `pip`-installable on request. Meantime, feel free to cherry-pick and
+extend the functionalities to your own use cases.
 
 **Functions**
 
@@ -207,9 +248,9 @@ Lazily scan and unpack JSON data read as plain text, given a `Polars` schema.
 - `path_schema` \[`str`\]: Path to the plain text schema describing the JSON content.
 - `path_data` \[`str`\]: Path to the JSON file (or multiple files via glob patterns).
 - `separator` \[`str`\]: Separator to use when parsing the JSON file as a CSV; defaults
-  to `|` but `#` or `$` could be good candidates too. Note this separator should \*NOT\*
-  be present in the file at all (`,` or `:` are thus out of scope given the JSON
-  context). Otherwise... UTF-8 characters?
+  to `|` but `#` or `$` could be good candidates too (as are UTF-8 characters?). Note
+  this separator should \*NOT\* be present in the file at all (`,` or `:` are thus out
+  of question given the JSON context).
 
 **Returns**
 
@@ -438,8 +479,6 @@ The following patterns (recognised via regular expressions) are supported:
 
 - `([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9]+)` for an attribute name, an
   equal sign (`=`), a new name for the attribute, a column (`:`) and a datatype.
-  Attribute name and datatype must not have spaces and only include alphanumerical or
-  underscore (`_`) characters.
 - `([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9]+)` for an attribute name, a column (`:`) and a
   datatype; for instance `attribute: Utf8` in the example above.
 - `([A-Za-z0-9]+)` for a lone datatype; for instance the inner content of the `List()`
@@ -448,6 +487,9 @@ The following patterns (recognised via regular expressions) are supported:
 - `[(\[{<]` and its `[)\]}>]` counterpart for opening and closing of nested datatypes.
   Any of these characters can be used to open or close nested structures; mixing also
   allowed, for the better or the worse.
+
+Note attribute name(s) and datatype must not have spaces and only include alphanumerical
+or underscore (`_`) characters.
 
 Indentation and trailing commas are ignored. The source is parsed until the end of the
 file is reached or a `SchemaParsingError` exception is raised.
