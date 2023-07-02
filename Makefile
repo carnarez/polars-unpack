@@ -15,6 +15,17 @@ env:
 	@docker build --tag polars-unpack .
 	@docker run --interactive $(FLAGS) polars-unpack /bin/bash
 
+serve:
+	@cp README.md web/index.md
+	@docker build --tag polars-unpack/web web
+	@rm -fr web/index.md
+	@docker run --interactive \
+	            --name polars-unpack-web \
+	            --publish 8000:80 \
+	            --rm \
+	            --tty \
+	            polars-unpack/web
+
 test:
 	@docker build --tag polars-unpack/tests tests
 	@docker run --env COLUMNS=$(COLUMNS) \
