@@ -2,8 +2,6 @@
 
 Automatic JSON unpacking to [`Polars`](https://pola.rs) `DataFrame` or `LazyFrame`.
 
-![](https://raw.githubusercontent.com/carnarez/polars-unpack/master/logos/py-polars-unpacked.png)
-
 The use case is as follows:
 
 - Provide a schema written in plain text describing some JSON content, to be converted
@@ -42,7 +40,7 @@ The requirements are illustrated below (JSON input, plain text schema, `Polars` 
 }
 ```
 
-```
+```text
 column: Utf8
 nested: List(
     Struct(
@@ -53,7 +51,7 @@ nested: List(
 missing_from_source: Float32
 ```
 
-```
+```text
 ┌─────────┬──────┬─────────┬─────────────────────┐
 │ column  ┆ attr ┆ renamed ┆ missing_from_source │
 │ ---     ┆ ---  ┆ ---     ┆ ---                 │
@@ -138,7 +136,7 @@ We expect the following example JSON:
 
 to translate into the given `Polars` schema:
 
-```
+```text
 attribute: Utf8
 nested: Struct(
     foo: Float32
@@ -324,7 +322,7 @@ format_error(unparsed: str) -> str:
 
 Format the message printed in the exception when an issue occurs.
 
-```
+```text
 Tripped on line 2
 
      1 │ headers: Struct(
@@ -453,7 +451,7 @@ Parse the plain text schema into a `Polars` `Struct`.
 
 We expect something as follows:
 
-```
+```text
 attribute: Utf8
 nested: Struct(
     foo: Float32
