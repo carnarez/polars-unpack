@@ -48,7 +48,8 @@ Although testing various functionalities, these tests are pretty independent. Bu
 ([schema](/samples/complex.schema) & [data](/samples/complex.ndjson)) are there to check
 if this is only fantasy. Running is convincing!
 
-Feel free to extend the functionalities to your own use case.
+Could make this `pip`-installable on request. Feel free to extend the functionalities to
+your own use case.
 """
 
 import pathlib

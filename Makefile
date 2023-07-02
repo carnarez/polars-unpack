@@ -6,7 +6,8 @@ FLAGS = --rm \
         --volume /etc/group:/etc/group:ro \
         --volume /etc/passwd:/etc/passwd:ro \
         --volume /etc/shadow:/etc/shadow:ro \
-        --volume $(PWD):/usr/src \
+        --volume $(PWD)/samples:/usr/src/samples \
+        --volume $(PWD)/unpack.py:/usr/src/unpack.py \
         --workdir /usr/src
 
 build:
