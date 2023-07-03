@@ -8,11 +8,14 @@ Add an unpacking animation to the `Polars` b(e)ar logo.
   `rect` objects.
 - [`rect_dimensions()`](#unpack_logorect_dimensions): Fetch the dimensions of all `rect`
   objects.
-- [`center()`](#unpack_logocenter): Calculate the center of all `rect` objects.
-- [`gap()`](#unpack_logogap): Calculate an average for the gap between `rect` objects.
-- [`width()`](#unpack_logowidth): Calculate the maximum width when unpacking the bear.
-- [`animate()`](#unpack_logoanimate): Update the dimensions of the SVG object and add
-  the animation.
+- [`calculate_average_gap()`](#unpack_logocalculate_average_gap): Calculate an average
+  for the gap between `rect` objects.
+- [`calculate_figure_center()`](#unpack_logocalculate_figure_center): Calculate the
+  center of the figure.
+- [`calculate_unpacked_width()`](#unpack_logocalculate_unpacked_width): Calculate the
+  maximum width when unpacking the bear.
+- [`animate_svg()`](#unpack_logoanimate_svg): Update the dimensions of the SVG object
+  and add the animation.
 
 ## Functions
 
@@ -50,31 +53,10 @@ Fetch the dimensions of all `rect` objects.
 
 - \[`list[tuple[float, float]]`\]: List of (width, height) pairs.
 
-### `unpack_logo.center`
+### `unpack_logo.calculate_average_gap`
 
 ```python
-center(rect: list[xml.etree.ElementTree.Element]) -> tuple[float, float]:
-```
-
-Calculate the center of all `rect` objects.
-
-**Parameters**
-
-- `rect` \[`list[xml.etree.ElementTree.Element]`\]: List of `Element` objects present in
-  the SVG.
-
-**Returns**
-
-- \[`tuple[float, float]`\]: Coordinates (x, y) of the center.
-
-**Notes**
-
-We should not need to use the y coordinate of the center in here.
-
-### `unpack_logo.gap`
-
-```python
-gap(rect: list[xml.etree.ElementTree.Element]) -> float:
+calculate_average_gap(rect: list[xml.etree.ElementTree.Element]) -> float:
 ```
 
 Calculate an average for the gap between `rect` objects.
@@ -88,10 +70,33 @@ Calculate an average for the gap between `rect` objects.
 
 - \[`float`\]: Averaged gap size between `rect` objects, as inferred from the bear.
 
-### `unpack_logo.width`
+### `unpack_logo.calculate_figure_center`
 
 ```python
-width(rect: list[xml.etree.ElementTree.Element]) -> float:
+calculate_figure_center(
+    rect: list[xml.etree.ElementTree.Element],
+) -> tuple[float, float]:
+```
+
+Calculate the center of the figure.
+
+**Parameters**
+
+- `rect` \[`list[xml.etree.ElementTree.Element]`\]: List of `Element` objects present in
+  the SVG.
+
+**Returns**
+
+- \[`tuple[float, float]`\]: Coordinates (x, y) of the center.
+
+**Notes**
+
+We should not need to use the y component of the center down here.
+
+### `unpack_logo.calculate_unpacked_width`
+
+```python
+calculate_unpacked_width(rect: list[xml.etree.ElementTree.Element]) -> float:
 ```
 
 Calculate the maximum width when unpacking the bear.
@@ -105,10 +110,12 @@ Calculate the maximum width when unpacking the bear.
 
 - \[`float`\]: Total width of the SVG after unpacking the bear.
 
-### `unpack_logo.animate`
+### `unpack_logo.animate_svg`
 
 ```python
-animate(tree: xml.etree.ElementTree.ElementTree) -> xml.etree.ElementTree.ElementTree:
+animate_svg(
+    tree: xml.etree.ElementTree.ElementTree,
+) -> xml.etree.ElementTree.ElementTree:
 ```
 
 Update the dimensions of the SVG object and add the animation.

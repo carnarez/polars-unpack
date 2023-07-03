@@ -57,32 +57,7 @@ def rect_dimensions(
     return [(float(r.get("width")), float(r.get("height"))) for r in rect]
 
 
-def center(rect: list[xml.etree.ElementTree.Element]) -> tuple[float, float]:
-    """Calculate the center of all `rect` objects.
-
-    Parameters
-    ----------
-    rect : list[xml.etree.ElementTree.Element]
-        List of `Element` objects present in the SVG.
-
-    Returns
-    -------
-    : tuple[float, float]
-        Coordinates (x, y) of the center.
-
-    Notes
-    -----
-    We should not need to use the y coordinate of the center in here.
-    """
-    crds: list[tuple[float, float]] = rect_coordinates(rect)
-
-    return (
-        sum([x for x, y in crds]) / len(crds),
-        sum([y for x, y in crds]) / len(crds),
-    )
-
-
-def gap(rect: list[xml.etree.ElementTree.Element]) -> float:
+def calculate_average_gap(rect: list[xml.etree.ElementTree.Element]) -> float:
     """Calculate an average for the gap between `rect` objects.
 
     Parameters
@@ -100,16 +75,46 @@ def gap(rect: list[xml.etree.ElementTree.Element]) -> float:
 
     gaps: list[float] = []
 
+    # find the gaps
     x0 = 0
     for i, ((x, _y), (w, _h)) in enumerate(zip(crds, dims, strict=True)):
         if i and (g := x - x0) > 1e-3:
             gaps.append(g)
+
+        # eww but am lazy today
         x0 = x + w
 
     return sum(gaps) / len(gaps)
 
 
-def width(rect: list[xml.etree.ElementTree.Element]) -> float:
+def calculate_figure_center(
+    rect: list[xml.etree.ElementTree.Element],
+) -> tuple[float, float]:
+    """Calculate the center of the figure.
+
+    Parameters
+    ----------
+    rect : list[xml.etree.ElementTree.Element]
+        List of `Element` objects present in the SVG.
+
+    Returns
+    -------
+    : tuple[float, float]
+        Coordinates (x, y) of the center.
+
+    Notes
+    -----
+    We should not need to use the y component of the center down here.
+    """
+    crds: list[tuple[float, float]] = rect_coordinates(rect)
+
+    return (
+        sum([x for x, y in crds]) / len(crds),
+        sum([y for x, y in crds]) / len(crds),
+    )
+
+
+def calculate_unpacked_width(rect: list[xml.etree.ElementTree.Element]) -> float:
     """Calculate the maximum width when unpacking the bear.
 
     Parameters
@@ -124,10 +129,10 @@ def width(rect: list[xml.etree.ElementTree.Element]) -> float:
     """
     dims: list[tuple[float, float]] = rect_dimensions(rect)
 
-    return sum([w for w, h in dims]) + gap(rect) * (len(rect) - 1)
+    return sum([w for w, h in dims]) + calculate_average_gap(rect) * (len(rect) - 1)
 
 
-def animate(
+def animate_svg(
     tree: xml.etree.ElementTree.ElementTree,
 ) -> xml.etree.ElementTree.ElementTree:
     """Update the dimensions of the SVG object and add the animation.
@@ -146,16 +151,16 @@ def animate(
     rect: list[xml.etree.ElementTree.Element] = list(root)
 
     # svg dimensions
-    svg_width = width(rect)
+    svg_width = calculate_unpacked_width(rect)
     svg_height = float("".join(re.findall(r"[\d\.]+", root.get("height"))))
 
     # centers of packed and unpacked figures
-    bear_center = center(rect)
+    bear_center = calculate_figure_center(rect)
     bars_center = (svg_width / 2, svg_height / 2)
     translation = bars_center[0] - bear_center[0]
 
     # gap between bars
-    gap_size = gap(rect)
+    gap_size = calculate_average_gap(rect)
 
     # update svg properties
     root.set("width", f"{svg_width:.3f}mm")
@@ -201,14 +206,14 @@ def animate(
         r.set("x", str(xs))
         r.set("y", str(ys))
 
-        # eww
+        # eww but am lazy today
         x0 += float(r.get("width")) + gap_size
 
     return tree
 
 
 if __name__ == "__main__":
-    tree = animate(xml.etree.ElementTree.parse(sys.argv[1]))
+    tree = animate_svg(xml.etree.ElementTree.parse(sys.argv[1]))
     # remove namespaces that break the animation
     sys.stdout.write(
         xml.etree.ElementTree.tostring(tree.getroot(), encoding="utf-8")
