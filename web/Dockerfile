@@ -1,7 +1,6 @@
 # render markdown to html
 
 FROM python:slim as render
-ENV test=test4
 
 WORKDIR /usr/src
 
@@ -36,7 +35,6 @@ RUN wget --quiet https://raw.githubusercontent.com/carnarez/polars-unpack/master
 # minify everything in place
 
 FROM node:alpine as bundle
-ENV test=test4
 
 WORKDIR /var/www
 
@@ -86,6 +84,7 @@ RUN addgroup -S www \
 WORKDIR /var/www
 
 COPY --from=bundle /var/www .
+COPY logo.png .
 
 USER www
 
