@@ -6,7 +6,7 @@ WORKDIR /usr/src
 
 COPY front-matter.md .
 COPY polars-logo.svg .
-COPY unpack.py .
+COPY unpack_logo.py .
 
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends --yes git wget \
@@ -33,7 +33,7 @@ RUN wget --quiet https://raw.githubusercontent.com/carnarez/polars-unpack/master
     done \
  && python render.py --prefix=/var/www `find . -name "*.md" | grep -v front-matter.md`
 
-RUN python unpack.py polars-logo.svg > /var/www/polars-unpacked.svg
+RUN python unpack_logo.py polars-logo.svg > /var/www/polars-unpacked.svg
 
 
 # minify everything in place
