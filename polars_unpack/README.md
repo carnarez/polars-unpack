@@ -98,8 +98,6 @@ extend the functionalities to your own use cases.
   print the `Polars`-inferred schema.
 - [`parse_schema()`](#unpackparse_schema): Parse a plain text JSON schema into a
   `Polars` `Struct`.
-- [`unpack_frame()`](#unpackunpack_frame): Unpack a \[nested\] JSON into a `Polars`
-  `DataFrame` or `LazyFrame` given a schema.
 - [`unpack_ndjson()`](#unpackunpack_ndjson): Lazily scan and unpack newline-delimited
   JSON file given a `Polars` schema.
 - [`unpack_text()`](#unpackunpack_text): Lazily scan and unpack JSON data read as plain
@@ -117,6 +115,8 @@ extend the functionalities to your own use cases.
   encountered and cannot be parsed.
 - [`UnknownDataTypeError`](#unpackunknowndatatypeerror): When an unknown/unsupported
   datatype is encountered.
+- [`UnpackFrame`](#unpackunpackframe): Object to register new functionality on `Polars`
+  objects.
 
 ## Functions
 
@@ -173,42 +173,6 @@ Parse a plain text JSON schema into a `Polars` `Struct`.
 **Returns**
 
 - \[`polars.Struct`\]: JSON schema translated into `Polars` datatypes.
-
-### `unpack.unpack_frame`
-
-```python
-unpack_frame(
-    df: pl.DataFrame | pl.LazyFrame,
-    dtype: pl.DataType,
-    json_path: str = "",
-    column: str | None = None,
-) -> pl.DataFrame | pl.LazyFrame:
-```
-
-Unpack a \[nested\] JSON into a `Polars` `DataFrame` or `LazyFrame` given a schema.
-
-**Parameters**
-
-- `df` \[`polars.DataFrame | polars.LazyFrame`\]: Current `Polars` `DataFrame` (or
-  `LazyFrame`) object.
-- `dtype` \[`polars.DataType`\]: Datatype of the current object (`polars.Array`,
-  `polars.List` or `polars.Struct`).
-- `json_path` \[`str`\]: Full JSON path (_aka_ breadcrumbs) to the current field.
-- `column` \[`str | None`\]: Column to apply the unpacking on; defaults to `None`. This
-  is used when the current object has children but no field name; this is the case for
-  convoluted `polars.List` within a `polars.List` for instance.
-
-**Returns**
-
-- \[`polars.DataFrame | polars.LazyFrame`\]: Updated \[unpacked\] `Polars` `DataFrame`
-  (or `LazyFrame`) object.
-
-**Notes**
-
-- The `polars.Array` is considered the \[obsolete\] ancestor of `polars.List` and
-  expected to behave identically.
-- Unpacked columns will be renamed as their full respective JSON paths to avoid
-  potential identical names.
 
 ### `unpack.unpack_ndjson`
 
@@ -539,3 +503,63 @@ When an unknown/unsupported datatype is encountered.
 ```python
 UnknownDataTypeError()
 ```
+
+### `unpack.UnpackFrame`
+
+Object to register new functionality on `Polars` objects.
+
+**Decoration** via `@pl.api.register_dataframe_namespace()`,
+`@pl.api.register_lazyframe_namespace()`.
+
+**Methods**
+
+- [`unpack()`](#unpackunpackframeunpack): Unpack JSON content into a `DataFrame` (or
+  `LazyFrame`) given a schema.
+
+#### Constructor
+
+```python
+UnpackFrame(df: pl.DataFrame | pl.LazyFrame)
+```
+
+Instantiate the object.
+
+**Parameters**
+
+- `df` \[`pl.DataFrame | pl.LazyFrame`\]: `Polars` `DataFrame` or `LazyFrame` object to
+  unpack.
+
+#### Methods
+
+##### `unpack.UnpackFrame.unpack`
+
+```python
+unpack(
+    dtype: pl.DataType,
+    json_path: str = "",
+    column: str | None = None,
+) -> pl.DataFrame | pl.LazyFrame:
+```
+
+Unpack JSON content into a `DataFrame` (or `LazyFrame`) given a schema.
+
+**Parameters**
+
+- `dtype` \[`polars.DataType`\]: Datatype of the current object (`polars.Array`,
+  `polars.List` or `polars.Struct`).
+- `json_path` \[`str`\]: Full JSON path (_aka_ breadcrumbs) to the current field.
+- `column` \[`str | None`\]: Column to apply the unpacking on; defaults to `None`. This
+  is used when the current object has children but no field name; this is the case for
+  convoluted `polars.List` within a `polars.List` for instance.
+
+**Returns**
+
+- \[`polars.DataFrame | polars.LazyFrame`\]: Updated \[unpacked\] `Polars` `DataFrame`
+  (or `LazyFrame`) object.
+
+**Notes**
+
+- The `polars.Array` is considered the \[obsolete\] ancestor of `polars.List` and
+  expected to behave identically.
+- Unpacked columns will be renamed as their full respective JSON paths to avoid
+  potential identical names.

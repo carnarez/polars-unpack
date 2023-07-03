@@ -225,68 +225,6 @@ def parse_schema(path_schema: str) -> pl.Struct:
         return sp
 
 
-def unpack_frame(
-    df: pl.DataFrame | pl.LazyFrame,
-    dtype: pl.DataType,
-    json_path: str = "",
-    column: str | None = None,
-) -> pl.DataFrame | pl.LazyFrame:
-    """Unpack a [nested] JSON into a `Polars` `DataFrame` or `LazyFrame` given a schema.
-
-    Parameters
-    ----------
-    df : polars.DataFrame | polars.LazyFrame
-        Current `Polars` `DataFrame` (or `LazyFrame`) object.
-    dtype : polars.DataType
-        Datatype of the current object (`polars.Array`, `polars.List` or
-        `polars.Struct`).
-    json_path : str
-        Full JSON path (_aka_ breadcrumbs) to the current field.
-    column : str | None
-        Column to apply the unpacking on; defaults to `None`. This is used when the
-        current object has children but no field name; this is the case for convoluted
-        `polars.List` within a `polars.List` for instance.
-
-    Returns
-    -------
-    : polars.DataFrame | polars.LazyFrame
-        Updated [unpacked] `Polars` `DataFrame` (or `LazyFrame`) object.
-
-    Notes
-    -----
-    * The `polars.Array` is considered the [obsolete] ancestor of `polars.List` and
-      expected to behave identically.
-    * Unpacked columns will be renamed as their full respective JSON paths to avoid
-      potential identical names.
-    """
-    # if we are dealing with a nesting column
-    if column is not None:
-        if dtype in (pl.Array, pl.List):
-            # rename column to json path
-            jp = f"{json_path}{JSON_PATH_SEPARATOR}{column}".lstrip(JSON_PATH_SEPARATOR)
-            if column in df.columns:
-                df = df.rename({column: jp})
-            # unpack
-            df = unpack_frame(df.explode(jp), dtype.inner, jp, jp)
-        elif dtype == pl.Struct:
-            df = unpack_frame(df.unnest(column), dtype, json_path)
-
-    # unpack nested children columns when encountered
-    elif hasattr(dtype, "fields"):
-        for f in dtype.fields:
-            # rename column to json path
-            jp = f"{json_path}{JSON_PATH_SEPARATOR}{f.name}".lstrip(JSON_PATH_SEPARATOR)
-            if f.name in df.columns:
-                df = df.rename({f.name: jp})
-            # unpack
-            if type(f.dtype) in (pl.Array, pl.List):
-                df = unpack_frame(df.explode(jp), f.dtype.inner, jp, jp)
-            elif type(f.dtype) == pl.Struct:
-                df = unpack_frame(df.unnest(jp), f.dtype, jp)
-
-    return df
-
-
 def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
     """Lazily scan and unpack newline-delimited JSON file given a `Polars` schema.
 
@@ -314,7 +252,7 @@ def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
     df = pl.scan_ndjson(path_data)
 
     # unpack object
-    df = unpack_frame(df, sp.struct)
+    df = df.json.unpack(sp.struct)
 
     # add missing columns
     df = df.with_columns(
@@ -344,8 +282,8 @@ def unpack_text(path_schema: str, path_data: str, separator: str = "|") -> pl.La
     separator : str
         Separator to use when parsing the JSON file as a CSV; defaults to `|` but `#` or
         `$` could be good candidates too (as are UTF-8 characters?). Note this separator
-        should \*NOT\* be present in the file at all (`,` or `:` are thus out of question
-        given the JSON context).
+        should \*NOT\* be present in the file at all (`,` or `:` are thus out of
+        question given the JSON context).
 
     Returns
     -------
@@ -380,7 +318,7 @@ def unpack_text(path_schema: str, path_data: str, separator: str = "|") -> pl.La
 
     # unpack object and rename fields (otherwise renamed to their full json paths)
     # no other transformations are necessary as the schema is already dominant here
-    return unpack_frame(df, sp.struct).rename(sp.json_paths)
+    return df.json.unpack(sp.struct).rename(sp.json_paths)
 
 
 class SchemaParser:
@@ -820,6 +758,85 @@ class SchemaParsingError(Exception):
 
 class UnknownDataTypeError(Exception):
     """When an unknown/unsupported datatype is encountered."""
+
+
+@pl.api.register_dataframe_namespace("json")
+@pl.api.register_lazyframe_namespace("json")
+class UnpackFrame:
+    """Object to register new functionality on `Polars` objects."""
+
+    def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
+        """Instantiate the object.
+
+        Parameters
+        ----------
+        df : pl.DataFrame | pl.LazyFrame
+            `Polars` `DataFrame` or `LazyFrame` object to unpack.
+        """
+        self._df = df
+
+    def unpack(
+        self,
+        dtype: pl.DataType,
+        json_path: str = "",
+        column: str | None = None,
+    ) -> pl.DataFrame | pl.LazyFrame:
+        """Unpack JSON content into a `DataFrame` (or `LazyFrame`) given a schema.
+
+        Parameters
+        ----------
+        dtype : polars.DataType
+            Datatype of the current object (`polars.Array`, `polars.List` or
+            `polars.Struct`).
+        json_path : str
+            Full JSON path (_aka_ breadcrumbs) to the current field.
+        column : str | None
+            Column to apply the unpacking on; defaults to `None`. This is used when the
+            current object has children but no field name; this is the case for
+            convoluted `polars.List` within a `polars.List` for instance.
+
+        Returns
+        -------
+        : polars.DataFrame | polars.LazyFrame
+            Updated [unpacked] `Polars` `DataFrame` (or `LazyFrame`) object.
+
+        Notes
+        -----
+        * The `polars.Array` is considered the [obsolete] ancestor of `polars.List` and
+          expected to behave identically.
+        * Unpacked columns will be renamed as their full respective JSON paths to avoid
+          potential identical names.
+        """
+        # if we are dealing with a nesting column
+        if column is not None:
+            if dtype in (pl.Array, pl.List):
+                # rename column to json path
+                jp = f"{json_path}{JSON_PATH_SEPARATOR}{column}".lstrip(
+                    JSON_PATH_SEPARATOR,
+                )
+                if column in self._df.columns:
+                    self._df = self._df.rename({column: jp})
+                # unpack
+                self._df = self._df.explode(jp).json.unpack(dtype.inner, jp, jp)
+            elif dtype == pl.Struct:
+                self._df = self._df.unnest(column).json.unpack(dtype, json_path)
+
+        # unpack nested children columns when encountered
+        elif hasattr(dtype, "fields"):
+            for f in dtype.fields:
+                # rename column to json path
+                jp = f"{json_path}{JSON_PATH_SEPARATOR}{f.name}".lstrip(
+                    JSON_PATH_SEPARATOR,
+                )
+                if f.name in self._df.columns:
+                    self._df = self._df.rename({f.name: jp})
+                # unpack
+                if type(f.dtype) in (pl.Array, pl.List):
+                    self._df = self._df.explode(jp).json.unpack(f.dtype.inner, jp, jp)
+                elif type(f.dtype) == pl.Struct:
+                    self._df = self._df.unnest(jp).json.unpack(f.dtype, jp)
+
+        return self._df
 
 
 if __name__ == "__main__":
