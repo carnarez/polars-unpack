@@ -1,4 +1,4 @@
-"""."""
+"""Add an unpacking animation to the `Polars` b(e)ar logo."""
 
 import re
 import sys
