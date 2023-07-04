@@ -104,9 +104,9 @@ jobs:
             done
           )
 
-          - name: Deploy to https://carnarez.github.io/polars-unpack/
-            run: |
-              (
-                cd web
-                ghp-import --branch www --force --push www
-              )
+      - name: Deploy to https://carnarez.github.io/polars-unpack/
+        run: |
+          (
+            cd web
+            ghp-import --branch www --force --push www
+          )
