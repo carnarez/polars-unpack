@@ -5,7 +5,7 @@ import sys
 import xml.etree.ElementTree
 
 # explicit enough
-ANIMATION_DURATION: str = "15s"
+ANIMATION_DURATION: str = "10s"
 
 # define the style of the contour; think css, but not totally
 CONTOUR_STYLE: str = ";".join(

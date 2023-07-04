@@ -24,7 +24,7 @@ RUN apt-get update \
  && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/build/render.py \
  && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/build/template.html
 
-RUN wget --quiet https://raw.githubusercontent.com/carnarez/polars-unpack/master/unpack.py \
+RUN wget --quiet https://raw.githubusercontent.com/carnarez/polars-unpack/master/polars_unpack/unpack.py \
  && ASTDOCS_WITH_LINENOS=1 astdocs unpack.py > index.md \
  && find . -name "*.md" | grep -v front-matter.md | while read f; do \
       mkdir -p /var/www/`dirname $f`; \
