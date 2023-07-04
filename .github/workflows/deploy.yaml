@@ -3,7 +3,7 @@ name: Render and bundle docs
 on:
   push:
     branches:
-      - github-actions
+      - master
 
 jobs:
   Deploy:
@@ -103,11 +103,10 @@ jobs:
               terser --compress --mangle --output $f $f
             done
           )
-          ls -lh web/www/
 
-          # - name: Deploy to https://carnarez.github.io/polars-unpack/
-          #   run: |
-          #     (
-          #       cd web
-          #       ghp-import --branch www --force --push www
-          #     )
+          - name: Deploy to https://carnarez.github.io/polars-unpack/
+            run: |
+              (
+                cd web
+                ghp-import --branch www --force --push www
+              )
