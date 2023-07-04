@@ -6,9 +6,9 @@ FLAGS = --rm \
         --volume /etc/group:/etc/group:ro \
         --volume /etc/passwd:/etc/passwd:ro \
         --volume /etc/shadow:/etc/shadow:ro \
+        --volume $(PWD)/polars_unpack:/usr/src/polars_unpack \
         --volume $(PWD)/samples:/usr/src/samples \
         --volume $(PWD)/tests:/usr/src/tests \
-        --volume $(PWD)/unpack.py:/usr/src/unpack.py \
         --workdir /usr/src
 
 env:
@@ -22,7 +22,7 @@ test:
 	            polars-unpack/tests \
 	                python -m pytest --capture=no \
 	                                 --color=yes \
-	                                 --cov=unpack \
+	                                 --cov=polars_unpack \
 	                                 --cov-report term-missing \
 	                                 --override-ini="cache_dir=/tmp/pytest" \
 	                                 --verbose \

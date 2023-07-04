@@ -5,7 +5,7 @@ import pathlib
 import polars as pl
 import pytest
 
-from unpack import (
+from polars_unpack import (
     POLARS_DATATYPES,
     DuplicateColumnError,
     PathRenamingError,

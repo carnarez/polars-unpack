@@ -5,7 +5,7 @@ import json
 import polars as pl
 import pytest
 
-from unpack import SchemaParser, unpack_frame, unpack_ndjson, unpack_text
+from polars_unpack import SchemaParser, unpack_ndjson, unpack_text
 
 
 def test_datatype() -> None:
@@ -34,7 +34,7 @@ def test_datatype() -> None:
     # tested in the other module but might as well...
     assert SchemaParser("Int64").to_struct() == dtype
     assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(df)
+    assert df.json.unpack(dtype).frame_equal(df)
 
 
 def test_list() -> None:
@@ -78,7 +78,7 @@ def test_list() -> None:
 
     assert SchemaParser("text:Utf8,json:List(Int64)").to_struct() == dtype
     assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(df.explode("json"))
+    assert df.json.unpack(dtype).frame_equal(df.explode("json"))
 
 
 def test_list_nested_in_list_nested_in_list() -> None:
@@ -149,7 +149,7 @@ def test_list_nested_in_list_nested_in_list() -> None:
     assert SchemaParser("text:Utf8,json:List(List(List(Int64)))").to_struct() == dtype
     assert dtype.to_schema() == df.schema
     assert (
-        unpack_frame(df, dtype)
+        df.json.unpack(dtype)
         .rename({"json.json.json.json": "json"})
         .frame_equal(
             df.explode("json").explode("json").explode("json"),
@@ -230,7 +230,7 @@ def test_list_nested_in_struct() -> None:
         == dtype
     )
     assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(
+    assert df.json.unpack(dtype).frame_equal(
         df.unnest("json")
         .unnest("foo")
         .explode("bar")
@@ -495,7 +495,7 @@ def test_rename_fields() -> None:
     )
 
     assert (
-        unpack_frame(df, dtype)
+        df.json.unpack(dtype)
         .rename(schema.json_paths)
         .frame_equal(df_renamed.unnest("json"))
     )
@@ -548,7 +548,7 @@ def test_struct() -> None:
         SchemaParser("text:Utf8,json:Struct(foo:Int64,bar:Int64)").to_struct() == dtype
     )
     assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(
+    assert df.json.unpack(dtype).frame_equal(
         df.unnest("json").rename({"foo": "json.foo", "bar": "json.bar"}),
     )
 
@@ -611,7 +611,7 @@ def test_struct_nested_in_list() -> None:
         == dtype
     )
     assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(
+    assert df.json.unpack(dtype).frame_equal(
         df.explode("json")
         .unnest("json")
         .rename({"foo": "json.foo", "bar": "json.bar"}),
@@ -701,7 +701,7 @@ def test_struct_nested_in_struct() -> None:
         == dtype
     )
     assert dtype.to_schema() == df.schema
-    assert unpack_frame(df, dtype).frame_equal(
+    assert df.json.unpack(dtype).frame_equal(
         df.unnest("json")
         .unnest("foo", "bar")
         .rename(
