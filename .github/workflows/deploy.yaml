@@ -3,7 +3,7 @@ name: Render and bundle docs
 on:
   push:
     branches:
-      - master
+      - github-actions
 
 jobs:
   Deploy:
