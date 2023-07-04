@@ -89,8 +89,7 @@ Although testing various functionalities, these tests are pretty independent. Bu
 ([schema](/samples/complex.schema) & [data](/samples/complex.ndjson)) are there to check
 if this is only fantasy. Running is convincing!
 
-Could make this `pip`-installable on request. Meantime, feel free to cherry-pick and
-extend the functionalities to your own use cases.
+Feel free to cherry-pick and extend the functionalities to your own use cases.
 
 **Functions**
 
@@ -115,8 +114,8 @@ extend the functionalities to your own use cases.
   encountered and cannot be parsed.
 - [`UnknownDataTypeError`](#unpackunknowndatatypeerror): When an unknown/unsupported
   datatype is encountered.
-- [`UnpackFrame`](#unpackunpackframe): Object to register new functionality on `Polars`
-  objects.
+- [`UnpackFrame`](#unpackunpackframe): Register a new `df.json.unpack()` method onto
+  `Polars` objects.
 
 ## Functions
 
@@ -256,15 +255,17 @@ Parse a plain text JSON schema into a `Polars` `Struct`.
 #### Constructor
 
 ```python
-SchemaParser(source: str = "")
+SchemaParser(source: str = "", separator: str = ".")
 ```
 
 Instantiate the object.
 
 **Parameters**
 
-- `source` \[`str`\]: JSON schema described in plain text, using `Polars` datatypes.
-  Defaults to an empty string (`""`).
+- `source` \[`str`\]: JSON schema described in plain text, using `Polars` datatypes;
+  defaults to an empty string (`""`).
+- `separator` \[`str`\]: JSON path separator to use when building the full JSON path;
+  defaults to a dot (`.`).
 
 **Attributes**
 
@@ -273,6 +274,7 @@ Instantiate the object.
 - `dtypes` \[`list[polars.DataType]`\]: Expected list of datatypes in the final `Polars`
   `DataFrame` or `LazyFrame`.
 - `json_paths` \[`dit[str, str]`\]: Dictionary of JSON path -> column name pairs.
+- `separator` \[`str`\]: JSON path separator to use when building the full JSON path.
 - `source` \[`str`\]: JSON schema described in plain text, using `Polars` datatypes.
 - `struct` \[`polars.Struct`\]: Plain text schema parsed as a `Polars` `Struct`.
 
@@ -506,7 +508,7 @@ UnknownDataTypeError()
 
 ### `unpack.UnpackFrame`
 
-Object to register new functionality on `Polars` objects.
+Register a new `df.json.unpack()` method onto `Polars` objects.
 
 **Decoration** via `@pl.api.register_dataframe_namespace()`,
 `@pl.api.register_lazyframe_namespace()`.
@@ -519,7 +521,7 @@ Object to register new functionality on `Polars` objects.
 #### Constructor
 
 ```python
-UnpackFrame(df: pl.DataFrame | pl.LazyFrame)
+UnpackFrame(df: pl.DataFrame | pl.LazyFrame, separator: str = ".")
 ```
 
 Instantiate the object.
@@ -528,6 +530,7 @@ Instantiate the object.
 
 - `df` \[`pl.DataFrame | pl.LazyFrame`\]: `Polars` `DataFrame` or `LazyFrame` object to
   unpack.
+- `separator` \[`str`\]: JSON path separator to use when building the full JSON path.
 
 #### Methods
 

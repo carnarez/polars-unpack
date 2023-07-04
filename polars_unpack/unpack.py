@@ -85,8 +85,7 @@ Although testing various functionalities, these tests are pretty independent. Bu
 ([schema](/samples/complex.schema) & [data](/samples/complex.ndjson)) are there to check
 if this is only fantasy. Running is convincing!
 
-Could make this `pip`-installable on request. Meantime, feel free to cherry-pick and
-extend the functionalities to your own use cases.
+Feel free to cherry-pick and extend the functionalities to your own use cases.
 """
 
 import pathlib
@@ -94,8 +93,6 @@ import re
 import sys
 
 import polars as pl
-
-JSON_PATH_SEPARATOR: str = "."
 
 POLARS_DATATYPES: dict[str, pl.DataType] = {
     "array": pl.List,
@@ -324,14 +321,17 @@ def unpack_text(path_schema: str, path_data: str, separator: str = "|") -> pl.La
 class SchemaParser:
     """Parse a plain text JSON schema into a `Polars` `Struct`."""
 
-    def __init__(self, source: str = "") -> None:
+    def __init__(self, source: str = "", separator: str = ".") -> None:
         """Instantiate the object.
 
         Parameters
         ----------
         source : str
-            JSON schema described in plain text, using `Polars` datatypes. Defaults to
+            JSON schema described in plain text, using `Polars` datatypes; defaults to
             an empty string (`""`).
+        separator : str
+            JSON path separator to use when building the full JSON path; defaults to a
+            dot (`.`).
 
         Attributes
         ----------
@@ -341,12 +341,15 @@ class SchemaParser:
             Expected list of datatypes in the final `Polars` `DataFrame` or `LazyFrame`.
         json_paths : dit[str, str]
             Dictionary of JSON path -> column name pairs.
+        separator : str
+            JSON path separator to use when building the full JSON path.
         source : str
             JSON schema described in plain text, using `Polars` datatypes.
         struct : polars.Struct
             Plain text schema parsed as a `Polars` `Struct`.
         """
         self.source = source
+        self.separator = separator
 
         self.columns: list[str] = []
         self.dtypes: list[pl.DataType] = []
@@ -462,13 +465,13 @@ class SchemaParser:
 
                 # json path and associated column name
                 path = (
-                    JSON_PATH_SEPARATOR.join(self.record["path"])
+                    self.separator.join(self.record["path"])
                     .replace("[]", "")
-                    .replace(JSON_PATH_SEPARATOR * 2, JSON_PATH_SEPARATOR)
-                    .rstrip(JSON_PATH_SEPARATOR)
+                    .replace(self.separator * 2, self.separator)
+                    .rstrip(self.separator)
                 )
                 self.json_paths[
-                    f"{path}{JSON_PATH_SEPARATOR}{name}".lstrip(JSON_PATH_SEPARATOR)
+                    f"{path}{self.separator}{name}".lstrip(self.separator)
                 ] = renamed_to
             else:
                 raise DuplicateColumnError(self.format_error(renamed_to))
@@ -525,13 +528,13 @@ class SchemaParser:
 
                 # json path and associated column name
                 path = (
-                    JSON_PATH_SEPARATOR.join(self.record["path"])
+                    self.separator.join(self.record["path"])
                     .replace("[]", "")
-                    .replace(JSON_PATH_SEPARATOR * 2, JSON_PATH_SEPARATOR)
-                    .rstrip(JSON_PATH_SEPARATOR)
+                    .replace(self.separator * 2, self.separator)
+                    .rstrip(self.separator)
                 )
                 self.json_paths[
-                    f"{path}{JSON_PATH_SEPARATOR}{name}".lstrip(JSON_PATH_SEPARATOR)
+                    f"{path}{self.separator}{name}".lstrip(self.separator)
                 ] = name
             else:
                 raise DuplicateColumnError(self.format_error(name))
@@ -763,17 +766,20 @@ class UnknownDataTypeError(Exception):
 @pl.api.register_dataframe_namespace("json")
 @pl.api.register_lazyframe_namespace("json")
 class UnpackFrame:
-    """Object to register new functionality on `Polars` objects."""
+    """Register a new `df.json.unpack()` method onto `Polars` objects."""
 
-    def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
+    def __init__(self, df: pl.DataFrame | pl.LazyFrame, separator: str = ".") -> None:
         """Instantiate the object.
 
         Parameters
         ----------
         df : pl.DataFrame | pl.LazyFrame
             `Polars` `DataFrame` or `LazyFrame` object to unpack.
+        separator : str
+            JSON path separator to use when building the full JSON path.
         """
-        self._df = df
+        self._df: pl.DataFrame | pl.LazyFrame = df
+        self.separator: str = separator
 
     def unpack(
         self,
@@ -811,9 +817,7 @@ class UnpackFrame:
         if column is not None:
             if dtype in (pl.Array, pl.List):
                 # rename column to json path
-                jp = f"{json_path}{JSON_PATH_SEPARATOR}{column}".lstrip(
-                    JSON_PATH_SEPARATOR,
-                )
+                jp = f"{json_path}{self.separator}{column}".lstrip(self.separator)
                 if column in self._df.columns:
                     self._df = self._df.rename({column: jp})
                 # unpack
@@ -825,9 +829,7 @@ class UnpackFrame:
         elif hasattr(dtype, "fields"):
             for f in dtype.fields:
                 # rename column to json path
-                jp = f"{json_path}{JSON_PATH_SEPARATOR}{f.name}".lstrip(
-                    JSON_PATH_SEPARATOR,
-                )
+                jp = f"{json_path}{self.separator}{f.name}".lstrip(self.separator)
                 if f.name in self._df.columns:
                     self._df = self._df.rename({f.name: jp})
                 # unpack

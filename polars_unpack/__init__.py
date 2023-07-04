@@ -1,7 +1,6 @@
 """Entrypoint for your JSON unpacking."""
 
 from .unpack import (
-    JSON_PATH_SEPARATOR,
     POLARS_DATATYPES,
     DuplicateColumnError,
     PathRenamingError,
