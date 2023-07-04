@@ -33,7 +33,7 @@ RUN wget --quiet https://raw.githubusercontent.com/carnarez/polars-unpack/master
     done \
  && python render.py --prefix=/var/www `find . -name "*.md" | grep -v front-matter.md`
 
-RUN python unpack_logo.py polars-logo.svg > /var/www/polars-unpacked.svg
+RUN python unpack_logo.py polars-logo.svg > /var/www/splash.svg
 
 
 # minify everything in place

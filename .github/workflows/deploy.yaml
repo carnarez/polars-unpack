@@ -1,0 +1,112 @@
+name: Render and bundle docs
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  Deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout https://github.com/carnarez/polars-unpack repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node v16.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
+
+      - name: Install Node dependencies
+        run: |
+          npm install --global --no-audit --no-fund \
+            autoprefixer \
+            clean-css-cli \
+            html-minifier \
+            postcss-cli \
+            terser
+
+      - name: Set up Python v3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --no-cache-dir \
+            ghp-import \
+            git+https://github.com/carnarez/astdocs@master \
+            git+https://github.com/carnarez/markdown-astdocs@master \
+            git+https://github.com/carnarez/markdown-img@master \
+            git+https://github.com/carnarez/markdown-insert@master \
+            git+https://github.com/carnarez/markdown-script@master \
+            jinja2 \
+            lunr \
+            markdown \
+            pymdown-extensions \
+            pyyaml
+
+      - name: Render and bundle
+        run: |
+          # generate the documentation
+          (
+            cd polars_unpack
+            ASTDOCS_WITH_LINENOS=1 astdocs unpack.py > ../web/index.md
+            cp unpack.py ../web/unpack.py
+          )
+          # render the documentation
+          (
+            cd web
+            # will contain all rendered/bundled content
+            mkdir www
+            # where to find the templates (base url)
+            url=https://raw.githubusercontent.com/carnarez/markdown-render/master
+            # download the stylesheets
+            wget $url/style/style.css
+            wget $url/style/style-highlight.css
+            wget $url/style/style-markdown.css
+            wget $url/style/style-search.css
+            # convert markdown to html
+            wget $url/build/render.py
+            wget $url/build/template.html
+            cat front-matter.md index.md > tmp
+            mv tmp index.md
+            python render.py --prefix=www --root=https://carnarez.github.io/polars-unpack/ index.md
+            # generate the splash 
+            python unpack_logo.py polars-logo.svg > www/splash.svg
+            # bundle css
+            cat style.css style-*.css | grep -v '@import ".*"' > www/style.css
+            find www -name "*.css" | while read f; do
+              postcss $f --replace --use autoprefixer
+              cleancss --output $f $f
+            done
+            # bundle html
+            find www -name "*.html" | while read f; do
+              html-minifier --collapse-boolean-attributes \
+                            --collapse-whitespace \
+                            --output $f \
+                            --minify-css true \
+                            --minify-js true \
+                            --remove-attribute-quotes \
+                            --remove-comments \
+                            --remove-empty-attributes \
+                            --remove-optional-tags \
+                            --remove-redundant-attributes \
+                            --remove-script-type-attributes \
+                            --remove-style-link-type-attributes \
+                            --use-short-doctype \
+                            $f
+            done
+            # bundle javascript
+            find . -name "*.js" | while read f; do
+              terser --compress --mangle --output $f $f
+            done
+          )
+
+          - name: Deploy to https://carnarez.github.io/polars-unpack/
+            run: |
+              (
+                cd web
+                ghp-import --branch www --force --push www
+              )
