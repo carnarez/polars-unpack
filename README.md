@@ -2,13 +2,13 @@
 Get it via a simple:
 
 ```shell
-$ pip install git+https://github.com/carnarez/polars_unpack@master
+$ pip install git+https://github.com/carnarez/polars-unpack@master
 ```
 
 or simply:
 
 ```shell
-$ wget https://raw.githubusercontent.com/carnarez/polars_unpack/master/polars_unpack/unpack.py
+$ wget https://raw.githubusercontent.com/carnarez/polars-unpack/master/polars_unpack/unpack.py
 ```
 
 for the script itself, whatever you find more appropriate. The story behind the use case
