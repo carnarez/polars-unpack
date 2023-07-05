@@ -4,8 +4,15 @@ import re
 import sys
 import xml.etree.ElementTree
 
-# explicit enough
-ANIMATION_DURATION: str = "10s"
+# define the parameters for the animation; we expect three states, with two (start and
+# end) to be repeated to take a break there
+ANIMATION = {
+    "calcMode": "spline",
+    "dur": "10s",
+    "keySplines": ";".join(["0.1 0.8 0.2 1" for _ in range(4)]),
+    "keyTimes": "0;0.25;0.5;0.75;1",
+    "repeatCount": "indefinite",
+}
 
 # define the style of the contour; think css, but not totally
 CONTOUR_STYLE: str = ";".join(
@@ -178,28 +185,11 @@ def animate_svg(
 
         # add the animation; we add steps on purpose to stay at the position for a
         # little longer
-        r.append(
-            xml.etree.ElementTree.Element(
-                "animate",
-                {
-                    "attributeName": "x",
-                    "dur": ANIMATION_DURATION,
-                    "repeatCount": "indefinite",
-                    "values": f"{xs};{xs};{xe};{xe};{xs}",
-                },
-            ),
-        )
-        r.append(
-            xml.etree.ElementTree.Element(
-                "animate",
-                {
-                    "attributeName": "y",
-                    "dur": ANIMATION_DURATION,
-                    "repeatCount": "indefinite",
-                    "values": f"{ys};{ys};{ye};{ye};{ys}",
-                },
-            ),
-        )
+        ANIMATION.update({"attributeName": "x", "values": f"{xs};{xe};{xe};{xs};{xs}"})
+        r.append(xml.etree.ElementTree.Element("animate", ANIMATION))
+
+        ANIMATION.update({"attributeName": "y", "values": f"{ys};{ye};{ye};{ys};{ys}"})
+        r.append(xml.etree.ElementTree.Element("animate", ANIMATION))
 
         # initial properties
         r.set("style", CONTOUR_STYLE)
