@@ -1,11 +1,9 @@
-**Automatic JSON unpacking to [`Polars`](https://pola.rs) `DataFrame` or `LazyFrame`.**
+With this little package we increase the capabilities offered by
+[`Polars`](https://pola.rs) with the introduction of both a JSON schema parser, and an
+automated unpacking method available for both `DataFrame` or `LazyFrame`.
 
-With this little package we increase the capabilities offered by `Polars` with the
-introduction of both a JSON schema parser, and an automated unpacking method available
-for both `DataFrame` or `LazyFrame`.
-
-The initial use case is succintly illustrated as follows: by providing a schema written
-in the following `Polars`-flavoured pseudo-code
+The initial use case can be succinctly illustrated as follows: by providing a schema
+written in the following `Polars`-flavoured pseudo-code...
 
 ```text
 column: Utf8
@@ -18,13 +16,13 @@ nested: List(
 missing_from_source: Float32
 ```
 
-the newline-delimited JSON file defined below
+the newline-delimited JSON file defined below...
 
 ```json
 { "column": "content", "nested": [ { "attr": 0, "attr2": 2 }, { "attr": 1, "attr2": 3 } ], "omitted_in_schema": "ignored" }
 ```
 
-gets automatically unpacked (via the `.json.unpack(schema)` method) as
+gets automatically unpacked (via the `.json.unpack(schema)` method) as...
 
 ```text
 ┌─────────┬──────┬─────────┬─────────────────────┐
@@ -38,7 +36,7 @@ gets automatically unpacked (via the `.json.unpack(schema)` method) as
 ```
 
 Note the renaming syntax as well as the missing and extra attributes, and what this all
-mean for the final `Polars` object. More
+means for the final `Polars` object. More
 [convoluted examples](https://github.com/carnarez/polars-unpack/tree/master/samples) are
 provided in the repo.
 
