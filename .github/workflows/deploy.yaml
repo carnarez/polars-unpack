@@ -94,7 +94,7 @@ jobs:
             # generate the splash 
             python unpack_logo.py polars-logo.svg > /tmp/www/splash.svg
             # modify html links
-            sed -i 's|href=\"/|href=\"/polars-unpack]/|g;s|src=\"/|src=\"/polars-unpack/|g' $(find /tmp/www -name "*.html")
+            sed -i 's|href=\"/|href=\"/polars-unpack/|g;s|src=\"/|src=\"/polars-unpack/|g' $(find /tmp/www -name "*.html")
             # prepare css files
             cat _style.css _style-*.css | grep -v '@import ".*"' > _bundle.css
             rm _style.css _style-*.css

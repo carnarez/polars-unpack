@@ -42,9 +42,6 @@ mean for the final `Polars` object. More
 [convoluted examples](https://github.com/carnarez/polars-unpack/tree/master/samples) are
 provided in the repo.
 
-The documentation of the API and other helper functions can be found
-[there](https://carnarez.github.io/polars-unpack/).
-
 Both the parser and the definition of the `.json.unpack()` method are contained in a 
 single module. Make this one available on your system via a simple:
 
