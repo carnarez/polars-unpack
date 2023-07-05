@@ -243,31 +243,30 @@ def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
       `null` values.
     * Fields present in the JSON source but absent from the schema will be dropped.
     """
-    sp = parse_schema(path_schema)
+    s = parse_schema(path_schema)
 
-    # read as json
-    df = pl.scan_ndjson(path_data)
-
-    # unpack object
-    df = df.json.unpack(sp.struct)
+    # read as json and unpack the object
+    df = pl.scan_ndjson(path_data).json.unpack(s.struct)
 
     # add missing columns
     df = df.with_columns(
         [
             pl.lit(None).cast(d).alias(p)
-            for p, d in zip(sp.json_paths.keys(), sp.dtypes, strict=True)
+            for p, d in zip(s.json_paths.keys(), s.dtypes, strict=True)
             if p not in df.columns
         ],
     )
 
     # rename fields (otherwise renamed to their full json paths)
-    df = df.rename(sp.json_paths)
+    df = df.rename(s.json_paths)
 
     # final selection (drop extra/unwanted columns)
-    return df.select(sp.columns)
+    return df.select(s.columns)
 
 
-def unpack_text(path_schema: str, path_data: str, separator: str = "|") -> pl.LazyFrame:
+def unpack_text(
+    path_schema: str, path_data: str, separator: str = "|", **kwargs,
+) -> pl.LazyFrame:
     r"""Lazily scan and unpack JSON data read as plain text, given a `Polars` schema.
 
     Parameters
@@ -299,23 +298,24 @@ def unpack_text(path_schema: str, path_data: str, separator: str = "|") -> pl.La
     the JSON file. We do not need to add or remove missing or supplementary columns,
     everything is taken care of by the `json_extract()` method.
     """
-    sp = parse_schema(path_schema)
+    s = parse_schema(path_schema)
 
     # read as plain text
-    df = (
+    # unpack object and rename fields (otherwise renamed to their full json paths)
+    # no other transformations are necessary as the schema is already dominant here
+    return (
         pl.scan_csv(
             path_data,
             has_header=False,
-            new_columns=["json"],
+            new_columns=["raw"],
             separator=separator,
+            **kwargs,
         )
-        .select(pl.col("json").str.json_extract(sp.struct))
-        .unnest("json")
+        .select(pl.col("raw").str.json_extract(s.struct))
+        .unnest("raw")
+        .json.unpack(s.struct)
+        .rename(s.json_paths)
     )
-
-    # unpack object and rename fields (otherwise renamed to their full json paths)
-    # no other transformations are necessary as the schema is already dominant here
-    return df.json.unpack(sp.struct).rename(sp.json_paths)
 
 
 class SchemaParser:

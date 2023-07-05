@@ -199,7 +199,12 @@ Lazily scan and unpack newline-delimited JSON file given a `Polars` schema.
 ### `unpack.unpack_text`
 
 ```python
-unpack_text(path_schema: str, path_data: str, separator: str = "|") -> pl.LazyFrame:
+unpack_text(
+    path_schema: str,
+    path_data: str,
+    separator: str = "|",
+    **kwargs,
+) -> pl.LazyFrame:
 ```
 
 Lazily scan and unpack JSON data read as plain text, given a `Polars` schema.
