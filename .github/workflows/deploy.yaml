@@ -50,10 +50,19 @@ jobs:
       - name: Render and bundle
         run: |
           # generate the documentation
+          mkdir web/{api,tests}
+          cp README.md web/index.md
+          cp polars_unpack/unpack.py web/api
+          cp tests/test_*.py web/tests
           (
-            cd polars_unpack
-            ASTDOCS_WITH_LINENOS=1 astdocs unpack.py > ../web/index.md
-            cp unpack.py ../web/unpack.py
+            cd web/api
+            ASTDOCS_WITH_LINENOS=1 astdocs unpack.py > index.md
+            mv *.py ..
+          )
+          (
+            cd web/tests
+            ASTDOCS_WITH_LINENOS=1 astdocs . > index.md
+            mv *.py ..
           )
           # render the documentation
           (
@@ -63,31 +72,57 @@ jobs:
             # where to find the templates (base url)
             url=https://raw.githubusercontent.com/carnarez/markdown-render/master
             # download the stylesheets
-            wget $url/style/style.css
-            wget $url/style/style-highlight.css
-            wget $url/style/style-markdown.css
-            wget $url/style/style-search.css
+            wget $url/style/style.css -O _style.css
+            wget $url/style/style-highlight.css -O _style-highlight.css
+            wget $url/style/style-markdown.css -O _style-markdown.css
+            wget $url/style/style-search.css -O _style-search.css
+            # prepare markdown files
+            rm README.md
+            find . -name "*.md" | grep -e front-matter.md -e toc.md -v | while read f; do
+              mkdir -p /tmp/www/$(dirname $f)
+              cat front-matter.md $f > /tmp/md
+              mv /tmp/md $f
+            done
+            rm front-matter.md
             # convert markdown to html
             wget $url/build/render.py
             wget $url/build/template.html
-            cat front-matter.md index.md > tmp
-            mv tmp index.md
-            python render.py --prefix=www --root=https://carnarez.github.io/polars-unpack/ index.md
+            python render.py --prefix=/tmp/www \
+                             --root=https://carnarez.github.io/polars-unpack/ \
+                             $(find . -name "*.md" | grep -v toc.md)
+            rm toc.md
             # generate the splash 
-            python unpack_logo.py polars-logo.svg > www/splash.svg
+            python unpack_logo.py polars-logo.svg > /tmp/www/splash.svg
+            # modify html links
+            sed -i 's|href=\"/|href=\"/polars-unpack]/|g;s|src=\"/|src=\"/polars-unpack/|g' $(find /tmp/www -name "*.html")
+            # prepare css files
+            cat _style.css _style-*.css | grep -v '@import ".*"' > _bundle.css
+            rm _style.css _style-*.css
+            cat *.css > /tmp/www/style.css
+            rm *.css
+            find . -name "*.css" | while read f; do
+              cp $f /tmp/www/$(dirname $f)
+            done
+            # prepare js files
+            find . -name "*.js" | while read f; do
+              cp $f /tmp/www/$(dirname $f)
+            done
+          )
+          # minify everything
+          (
+            cd /tmp/www
             # bundle css
-            cat style.css style-*.css | grep -v '@import ".*"' > www/style.css
-            find www -name "*.css" | while read f; do
+            find . -name "*.css" | while read f; do
               postcss $f --replace --use autoprefixer
               cleancss --output $f $f
             done
             # bundle html
-            find www -name "*.html" | while read f; do
+            find . -name "*.html" | while read f; do
               html-minifier --collapse-boolean-attributes \
                             --collapse-whitespace \
-                            --output $f \
                             --minify-css true \
                             --minify-js true \
+                            --output $f \
                             --remove-attribute-quotes \
                             --remove-comments \
                             --remove-empty-attributes \
@@ -100,7 +135,7 @@ jobs:
             done
             # bundle javascript
             find . -name "*.js" | while read f; do
-              terser --compress --mangle --output $f $f
+              terser --compress --mangle --module --output $f $f
             done
           )
 
@@ -108,5 +143,5 @@ jobs:
         run: |
           (
             cd web
-            ghp-import --branch www --force --push www
+            ghp-import --branch www --force --push /tmp/www
           )
