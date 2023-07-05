@@ -4,10 +4,6 @@ FROM python:slim as render
 
 WORKDIR /usr/src
 
-COPY front-matter.md .
-COPY polars-logo.svg .
-COPY unpack_logo.py .
-
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends --yes git wget \
  && pip install -U pip \
@@ -24,14 +20,30 @@ RUN apt-get update \
  && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/build/render.py \
  && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/build/template.html
 
-RUN wget --quiet https://raw.githubusercontent.com/carnarez/polars-unpack/master/polars_unpack/unpack.py \
- && ASTDOCS_WITH_LINENOS=1 astdocs unpack.py > index.md \
- && find . -name "*.md" | grep -v front-matter.md | while read f; do \
+COPY . .
+
+RUN git clone --filter=blob:none --quiet https://github.com/carnarez/polars-unpack.git \
+ && mkdir api tests \
+ && mv polars-unpack/README.md index.md \
+ && mv polars-unpack/polars_unpack/unpack.py api \
+ && mv polars-unpack/tests/test_*.py tests \
+ && ( \
+      cd api; \
+      ASTDOCS_WITH_LINENOS=1 astdocs unpack.py > index.md; \
+      mv *.py ..; \
+    ) \
+ && ( \
+      cd tests; \
+      ASTDOCS_WITH_LINENOS=1 astdocs . > index.md; \
+      mv *.py ..; \
+    ) \
+ && rm -fr polars-unpack \
+ && find . -name "*.md" | grep -e front-matter.md -e toc.md -v | while read f; do \
       mkdir -p /var/www/`dirname $f`; \
       cat front-matter.md $f > /tmp/md; \
       mv /tmp/md $f; \
     done \
- && python render.py --prefix=/var/www `find . -name "*.md" | grep -v front-matter.md`
+ && python render.py --prefix=/var/www `find . -name "*.md" | grep -e front-matter.md -e toc.md -v`
 
 RUN python unpack_logo.py polars-logo.svg > /var/www/splash.svg
 
