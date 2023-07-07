@@ -241,8 +241,12 @@ def test_list_nested_in_struct() -> None:
 @pytest.mark.parametrize(
     ("df"),
     [
-        unpack_ndjson("samples/complex.schema", "samples/complex.ndjson").collect(),
-        unpack_text("samples/complex.schema", "samples/complex.ndjson").collect(),
+        unpack_ndjson(
+            "tests/samples/complex.schema", "tests/samples/complex.ndjson",
+        ).collect(),
+        unpack_text(
+            "tests/samples/complex.schema", "tests/samples/complex.ndjson",
+        ).collect(),
     ],
 )
 def test_real_life(df: pl.DataFrame) -> None:
@@ -378,7 +382,7 @@ def test_real_life(df: pl.DataFrame) -> None:
         Unpacked `Polars` `DataFrame`.
     """
     df_csv = pl.scan_csv(
-        "samples/complex.csv",
+        "tests/samples/complex.csv",
         dtypes={
             "timestamp": pl.Int64,
             "source": pl.Utf8,

@@ -1,4 +1,4 @@
-With this little package we increase the capabilities offered by
+With this little experiment we tried to increase the capabilities offered by
 [`Polars`](https://pola.rs) with the introduction of both a JSON schema parser, and an
 automated unpacking method available for both `DataFrame` or `LazyFrame`.
 
@@ -37,8 +37,8 @@ gets automatically unpacked (via the `.json.unpack(schema)` method) as...
 
 Note the renaming syntax as well as the missing and extra attributes, and what this all
 means for the final `Polars` object. More
-[convoluted examples](https://github.com/carnarez/polars-unpack/tree/master/samples) are
-provided in the repo.
+[convoluted examples](https://github.com/carnarez/polars-unpack/tree/master/tests/samples)
+are provided in the repo.
 
 Both the parser and the definition of the `.json.unpack()` method are contained in a 
 single module. Make this one available on your system via a simple:

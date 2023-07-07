@@ -141,8 +141,8 @@ def test_list_nested_in_struct() -> None:
 
 def test_pretty_printing() -> None:
     """Test whether an inferred schema is correctly printed."""
-    with pathlib.Path("samples/nested-list.schema").open() as f:
-        assert infer_schema("samples/nested-list.ndjson") == f.read().strip()
+    with pathlib.Path("tests/samples/nested-list.schema").open() as f:
+        assert infer_schema("tests/samples/nested-list.ndjson") == f.read().strip()
 
 
 def test_real_life() -> None:
@@ -272,8 +272,8 @@ def test_real_life() -> None:
     >
     ```
     """
-    dtype = parse_schema("samples/complex.schema").struct
-    df = pl.scan_ndjson("samples/complex.ndjson").collect()
+    dtype = parse_schema("tests/samples/complex.schema").struct
+    df = pl.scan_ndjson("tests/samples/complex.ndjson").collect()
 
     assert dtype.to_schema() == df.schema
 

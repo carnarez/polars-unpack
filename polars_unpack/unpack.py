@@ -62,7 +62,7 @@ The current working state of this little DIY can be checked (in `Docker`) via:
 
 ```shell
 $ make env
-> python unpack.py samples/complex.schema samples/complex.ndjson
+> python unpack.py tests/samples/complex.schema tests/samples/complex.ndjson
 ```
 
 Note that a call to the same script _without_ providing a schema returns a
@@ -71,7 +71,7 @@ syntax used to describe things in plain text):
 
 ```shell
 $ make env
-> python unpack.py samples/complex.ndjson
+> python unpack.py tests/samples/complex.ndjson
 ```
 
 A thorough(-ish) battery of tests can be performed (in `Docker`) via:
@@ -82,8 +82,8 @@ $ make test
 
 Although testing various functionalities, these tests are pretty independent. But the
 `test_real_life()` functions working on a common example
-([schema](/samples/complex.schema) & [data](/samples/complex.ndjson)) are there to check
-if this is only fantasy. Running is convincing!
+([schema](/tests/samples/complex.schema) & [data](/tests/samples/complex.ndjson)) are
+there to check if this is only fantasy. Running is convincing!
 
 Feel free to cherry-pick and extend the functionalities to your own use cases.
 """
@@ -265,7 +265,10 @@ def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
 
 
 def unpack_text(
-    path_schema: str, path_data: str, separator: str = "|", **kwargs,
+    path_schema: str,
+    path_data: str,
+    separator: str = "|",
+    **kwargs,
 ) -> pl.LazyFrame:
     r"""Lazily scan and unpack JSON data read as plain text, given a `Polars` schema.
 
