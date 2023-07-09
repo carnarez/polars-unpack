@@ -105,6 +105,6 @@ df = unpack_ndjson("**.ndjson", "file.schema")
 ```
 
 Note that these functions are using `scan_csv()` and `scan_ndjson()` respectively; any
-extra parameters passed to `unpack_text()` or `unpack_ndjson` functions will be
+extra parameters passed to `unpack_text()` or `unpack_ndjson()` functions will be
 forwarded to these methods (with the exception of the `separator` argument, read the
 docstring of `unpack_text()` for more information).

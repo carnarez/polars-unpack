@@ -687,7 +687,7 @@ class SchemaParser:
           datatypes. Any of these characters can be used to open or close nested
           structures; mixing also allowed, for the better or the worse.
 
-        Note attribute name(s) and datatype must not have spaces and only include
+        Note attribute names and datatypes must not contain spaces and only include
         alphanumerical or underscore (`_`) characters.
 
         Indentation and trailing commas are ignored. The source is parsed until the end
