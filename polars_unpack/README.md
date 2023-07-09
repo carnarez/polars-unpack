@@ -457,8 +457,8 @@ The following patterns (recognised via regular expressions) are supported:
   Any of these characters can be used to open or close nested structures; mixing also
   allowed, for the better or the worse.
 
-Note attribute name(s) and datatype must not have spaces and only include alphanumerical
-or underscore (`_`) characters.
+Note attribute names and datatypes must not contain spaces and only include
+alphanumerical or underscore (`_`) characters.
 
 Indentation and trailing commas are ignored. The source is parsed until the end of the
 file is reached or a `SchemaParsingError` exception is raised.
