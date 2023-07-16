@@ -100,6 +100,7 @@ const generateSchema = (
     json, parent, path = JSON_PATH_PREFIX, visited = [], duplicated = []
 ) => {
     const parentType = Array.isArray(json) ? "array" : "object";
+    const lambda = s => s.substring(10).replaceAll("-", "_");
 
     // iterate over the children
     Object.entries(json).forEach(([key, value]) => {
@@ -112,10 +113,10 @@ const generateSchema = (
         // json path handling
         if (parentType === "array") {
             childPath = `${path}-item`;
-            renamedKey = path.substring(10).replaceAll("-", "_");
+            renamedKey = lambda(path);
         } else {
             childPath = `${path}-${key.replaceAll("_", "-")}`;
-            renamedKey = childPath.substring(10).replaceAll("-", "_");
+            renamedKey = lambda(childPath);
         }
 
         // json path handling (skip the rest of the loop if already visited)
