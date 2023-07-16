@@ -65,7 +65,7 @@ article .maintext #unpack .unpacked > div {
   border-style: solid;
   border-width: 1px;
   flex-grow: 1;
-  max-height: calc(100vh - 2*var(--nav-height));
+  max-height: calc(100vh - 3*var(--nav-height));
   overflow: scroll;
   text-align: left;
 }
