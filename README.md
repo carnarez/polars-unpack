@@ -82,7 +82,7 @@ df = (
         "**.ndjson",
         has_header=False,
         new_columns=["raw"],
-        separator=separator,
+        separator="|",  # or any other character *absent* from the raw data
     )
     .select(pl.col("raw").str.json_extract(s.struct))
     .unnest("raw")
