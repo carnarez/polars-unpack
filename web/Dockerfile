@@ -55,9 +55,11 @@ FROM node:alpine as bundle
 WORKDIR /var/www
 
 COPY --from=render /var/www .
+COPY generator/script.js generator/script.js
+COPY generator/style.css generator/style.css
 
 RUN npm config set update-notifier false \
- && npm install --global --no-audit --no-fund autoprefixer clean-css-cli html-minifier postcss-cli | grep -v ^$ \
+ && npm install --global --no-audit --no-fund autoprefixer clean-css-cli html-minifier postcss-cli terser | grep -v ^$ \
  && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/style/style.css \
  && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/style/style-highlight.css \
  && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/style/style-markdown.css \
@@ -84,6 +86,9 @@ RUN npm config set update-notifier false \
                     --remove-style-link-type-attributes \
                     --use-short-doctype \
                     $f; \
+    done \
+ && find . -name "*.js" | while read f; do \
+      terser --compress --mangle --output $f $f; \
     done
 
 
