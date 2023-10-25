@@ -37,10 +37,11 @@ jobs:
           python -m pip install --no-cache-dir \
             ghp-import \
             git+https://github.com/carnarez/astdocs@master \
-            git+https://github.com/carnarez/markdown-astdocs@master \
-            git+https://github.com/carnarez/markdown-img@master \
-            git+https://github.com/carnarez/markdown-insert@master \
-            git+https://github.com/carnarez/markdown-script@master \
+            git+https://github.com/carnarez/markdown-extension-astdocs@master \
+            git+https://github.com/carnarez/markdown-extension-img@master \
+            git+https://github.com/carnarez/markdown-extension-insert@master \
+            git+https://github.com/carnarez/markdown-extension-script@master \
+            git+https://github.com/carnarez/markdown-render@master \
             jinja2 \
             lunr \
             markdown \
@@ -68,14 +69,7 @@ jobs:
           (
             cd web
             # will contain all rendered/bundled content
-            mkdir www
-            # where to find the templates (base url)
-            url=https://raw.githubusercontent.com/carnarez/markdown-render/master
-            # download the stylesheets
-            wget $url/style/style.css -O _style.css
-            wget $url/style/style-highlight.css -O _style-highlight.css
-            wget $url/style/style-markdown.css -O _style-markdown.css
-            wget $url/style/style-search.css -O _style-search.css
+            mkdir /tmp/www
             # prepare markdown files
             rm README.md
             find . -name "*.md" | grep -e front-matter.md -e toc.md -v | while read f; do
@@ -85,28 +79,22 @@ jobs:
             done
             rm front-matter.md
             # convert markdown to html
-            wget $url/build/render.py
-            wget $url/build/template.html
-            python render.py --prefix=/tmp/www \
-                             --root=https://carnarez.github.io/polars-unpack/ \
-                             $(find . -name "*.md" | grep -v toc.md)
+            render-markdown --prefix=/tmp/www \
+                            --root=https://carnarez.github.io/polars-unpack/ \
+                            $(find . -name "*.md" | grep -v toc.md)
             rm toc.md
             # generate the splash 
             python unpack_logo.py polars-logo.svg > /tmp/www/splash.svg
             # modify html links
             sed -i 's|href=\"/|href=\"/polars-unpack/|g;s|src=\"/|src=\"/polars-unpack/|g' $(find /tmp/www -name "*.html")
             # prepare css files
-            cat _style.css _style-*.css | grep -v '@import ".*"' > _bundle.css
-            rm _style.css _style-*.css
+            git clone --depth=1 https://github.com/carnarez/markdown-render-styling.git
+            cat markdown-render-styling/style.css markdown-render-styling/style-*.css | grep -v '@import ".*"' > _bundle.css
             cat *.css > /tmp/www/style.css
-            rm *.css
-            find . -name "*.css" | while read f; do
-              cp $f /tmp/www/$(dirname $f)
-            done
+            rm -fr markdown-render-styling *.css
+            find . -name "*.css" | while read f; do cp $f /tmp/www/$(dirname $f); done
             # prepare js files
-            find . -name "*.js" | while read f; do
-              cp $f /tmp/www/$(dirname $f)
-            done
+            find . -name "*.js" | while read f; do cp $f /tmp/www/$(dirname $f); done
           )
           # minify everything
           (
@@ -133,10 +121,8 @@ jobs:
                             --use-short-doctype \
                             $f
             done
-            # bundle javascript
-            find . -name "*.js" | while read f; do
-              terser --compress --mangle --module --output $f $f
-            done
+            # bundle js
+            find . -name "*.js" | while read f; do terser --compress --mangle --module --output $f $f; done
           )
 
       - name: Deploy to https://carnarez.github.io/polars-unpack/
