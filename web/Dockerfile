@@ -42,7 +42,7 @@ RUN git clone --filter=blob:none --quiet https://github.com/carnarez/polars-unpa
       cat front-matter.md $f > /tmp/md; \
       mv /tmp/md $f; \
     done \
- && render-markdown --prefix=/var/www `find . -name "*.md" | grep -e front-matter.md -e toc.md -v`
+ && render-markdown --prefix=/var/www `find . -name "*.md" | grep -e front-matter.md -e toc.md -v` \
  && python unpack_logo.py polars-logo.svg > /var/www/splash.svg
 
 
