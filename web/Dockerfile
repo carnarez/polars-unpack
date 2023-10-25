@@ -57,8 +57,7 @@ COPY --from=render /var/www .
 COPY generator/script.js generator/script.js
 COPY generator/style.css generator/style.css
 
-RUN rm `find . -name "*.md"` \
- && apk --no-cache add git \
+RUN apk --no-cache add git \
  && npm config set update-notifier false \
  && npm install --global --no-audit --no-fund autoprefixer \
                                               clean-css-cli \
@@ -68,9 +67,8 @@ RUN rm `find . -name "*.md"` \
     | grep -v ^$ \
  && git clone --depth=1 https://github.com/carnarez/markdown-render-styling.git \
  && cat markdown-render-styling/style.css markdown-render-styling/style-*.css | grep -v '@import ".*"' > _bundle.css \
- && rm -fr markdown-render-styling \
  && cat *.css > bundle.css_ \
- && rm *.css \
+ && rm -fr markdown-render-styling *.css \
  && mv bundle.css_ style.css \
  && find . -name "*.css" | while read f; do \
       postcss $f --replace --use autoprefixer; \
