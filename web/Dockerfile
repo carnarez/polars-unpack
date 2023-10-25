@@ -5,20 +5,19 @@ FROM python:slim as render
 WORKDIR /usr/src
 
 RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends --yes git wget \
+ && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends --yes git \
  && pip install -U pip \
  && pip install --no-cache-dir git+https://github.com/carnarez/astdocs@master \
-                               git+https://github.com/carnarez/markdown-astdocs@master \
-                               git+https://github.com/carnarez/markdown-img@master \
-                               git+https://github.com/carnarez/markdown-insert@master \
-                               git+https://github.com/carnarez/markdown-script@master \
+                               git+https://github.com/carnarez/markdown-extension-astdocs@master \
+                               git+https://github.com/carnarez/markdown-extension-img@master \
+                               git+https://github.com/carnarez/markdown-extension-insert@master \
+                               git+https://github.com/carnarez/markdown-extension-script@master \
+                               git+https://github.com/carnarez/markdown-render@master \
                                jinja2 \
                                lunr \
                                markdown \
                                pymdown-extensions \
-                               pyyaml \
- && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/build/render.py \
- && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/build/template.html
+                               pyyaml
 
 COPY . .
 
@@ -43,9 +42,8 @@ RUN git clone --filter=blob:none --quiet https://github.com/carnarez/polars-unpa
       cat front-matter.md $f > /tmp/md; \
       mv /tmp/md $f; \
     done \
- && python render.py --prefix=/var/www `find . -name "*.md" | grep -e front-matter.md -e toc.md -v`
-
-RUN python unpack_logo.py polars-logo.svg > /var/www/splash.svg
+ && render-markdown --prefix=/var/www `find . -name "*.md" | grep -e front-matter.md -e toc.md -v`
+ && python unpack_logo.py polars-logo.svg > /var/www/splash.svg
 
 
 # minify everything in place
@@ -55,18 +53,25 @@ FROM node:alpine as bundle
 WORKDIR /var/www
 
 COPY --from=render /var/www .
+
 COPY generator/script.js generator/script.js
 COPY generator/style.css generator/style.css
 
-RUN npm config set update-notifier false \
- && npm install --global --no-audit --no-fund autoprefixer clean-css-cli html-minifier postcss-cli terser | grep -v ^$ \
- && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/style/style.css \
- && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/style/style-highlight.css \
- && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/style/style-markdown.css \
- && wget --quiet https://raw.githubusercontent.com/carnarez/markdown-render/master/style/style-search.css \
- && cat style.css style-*.css | grep -v '@import ".*"' > bundle.css \
- && mv bundle.css style.css \
- && rm style-*.css \
+RUN rm `find . -name "*.md"` \
+ && apk --no-cache add git \
+ && npm config set update-notifier false \
+ && npm install --global --no-audit --no-fund autoprefixer \
+                                              clean-css-cli \
+                                              html-minifier \
+                                              postcss-cli \
+                                              terser \
+    | grep -v ^$ \
+ && git clone --depth=1 https://github.com/carnarez/markdown-render-styling.git \
+ && cat markdown-render-styling/style.css markdown-render-styling/style-*.css | grep -v '@import ".*"' > _bundle.css \
+ && rm -fr markdown-render-styling \
+ && cat *.css > bundle.css_ \
+ && rm *.css \
+ && mv bundle.css_ style.css \
  && find . -name "*.css" | while read f; do \
       postcss $f --replace --use autoprefixer; \
       cleancss --output $f $f; \
@@ -74,9 +79,9 @@ RUN npm config set update-notifier false \
  && find . -name "*.html" | while read f; do \
       html-minifier --collapse-boolean-attributes \
                     --collapse-whitespace \
-                    --output $f \
                     --minify-css true \
                     --minify-js true \
+                    --output $f \
                     --remove-attribute-quotes \
                     --remove-comments \
                     --remove-empty-attributes \
@@ -88,7 +93,7 @@ RUN npm config set update-notifier false \
                     $f; \
     done \
  && find . -name "*.js" | while read f; do \
-      terser --compress --mangle --output $f $f; \
+      terser --compress --mangle --module --output $f $f; \
     done
 
 
