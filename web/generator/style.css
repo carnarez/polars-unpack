@@ -94,7 +94,7 @@ article > div:first-child > #unpack .unpacked #unpack-rough-schema div {
   border-radius: 5px;
 }
 
-article > div:first-child > #unpack .unpacked #unpack-rough-schema > div:first-child {
+article > div:first-child > #unpack .unpacked #unpack-rough-schema > div {
   margin: 0;
 }
 
