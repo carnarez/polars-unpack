@@ -1,156 +1,142 @@
-article .maintext {
+article > div:first-child {
   max-width: 100%;
-  margin: 0;
   padding: 0;
+  margin: 0;
 }
 
-article .maintext #unpack {
+article > div:first-child > *:not(#unpack),
+article > div:first-child > #unpack > *:not(.unpacked) {
+  max-width: calc(var(--article-width) - 2rem);
+  margin: 1rem auto;
+}
+
+article > div:first-child > #unpack {
   text-align: center;
 }
 
-article .maintext #unpack .unpacked {
-  max-width: 100%;
-  margin: 0;
-  overflow-x: hidden;
-  padding: 0;
-}
-
-article .maintext > *:not(#unpack),
-article .maintext > #unpack > *:not(.unpacked) {
-  margin: 1rem auto;
-  max-width: calc(var(--max-width) - 2rem);
-}
-
-@media screen and (max-width: 1000px) {
-  article .maintext > *:not(#unpack),
-  article .maintext > #unpack > *:not(.unpacked) {
-    margin: 1rem;
-    max-width: var(--max-width);
-  }
-}
-
-article .maintext #unpack textarea {
-  background-color: transparent;
-  border-color: var(--font-color);
-  border-radius: 5px;
-  border-style: solid;
-  border-width: 1px;
-  color: var(--font-color);
+article > div:first-child > #unpack textarea {
+  width: 100%;
+  padding: 0.5rem;
   font-family: var(--font-family);
   font-size: var(--font-size);
-  outline: none;
-  padding: 0.5rem;
+  color: var(--font-color);
   resize: vertical;
-  width: 100%;
+  background-color: transparent;
+  border-color: var(--font-color);
+  border-style: solid;
+  border-width: 1px;
+  border-radius: 5px;
+  outline: none;
 }
 
-article .maintext #unpack textarea::placeholder {
+article > div:first-child > #unpack textarea::placeholder {
   color: var(--font-color);
   opacity: 0.5;
 }
 
-article .maintext #unpack textarea.error {
-  border-color: #ff7777;
+article > div:first-child > #unpack textarea.error {
+  border-color: #f77;
 }
 
-article .maintext #unpack .unpacked {
-  align-content: stretch;
+article > div:first-child > #unpack .unpacked {
   display: flex;
   gap: 1rem;
+  align-content: stretch;
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+  overflow-x: hidden;
 }
 
-article .maintext #unpack .unpacked > div {
-  border-color: var(--background-color-alt);
-  border-radius: 5px;
-  border-style: solid;
-  border-width: 1px;
+article > div:first-child > #unpack .unpacked > div {
   flex-grow: 1;
-  max-height: calc(100vh - 3*var(--nav-height));
+  max-height: calc(100vh - 2*var(--top-nav-height));
   overflow: scroll;
   text-align: left;
-}
-
-article .maintext #unpack .unpacked > div {
+  border-color: var(--background-color-alt);
+  border-style: solid;
+  border-width: 1px;
+  border-radius: 5px;
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
-article .maintext #unpack .unpacked > div::-webkit-scrollbar {
+article > div:first-child > #unpack .unpacked > div::-webkit-scrollbar {
   display: none;
 }
 
-article .maintext #unpack .unpacked #unpack-parsed-input {
+article > div:first-child > #unpack .unpacked #unpack-parsed-input,
+article > div:first-child > #unpack .unpacked #unpack-rough-schema {
+  font-size: 95%;
+}
+
+article > div:first-child > #unpack .unpacked #unpack-parsed-input {
   padding: 0.5rem 1rem;
-}
-
-article .maintext #unpack .unpacked #unpack-rough-schema {
-  padding: 1rem;
-}
-
-article .maintext #unpack .unpacked #unpack-parsed-input {
   margin: 0 0 0 1rem;
 }
 
-article .maintext #unpack .unpacked #unpack-rough-schema {
+article > div:first-child > #unpack .unpacked #unpack-rough-schema {
+  padding: 1rem;
   margin: 0 1rem 0 0;
 }
 
-article .maintext #unpack .unpacked #unpack-parsed-input div,
-article .maintext #unpack .unpacked #unpack-rough-schema div {
+article > div:first-child > #unpack .unpacked #unpack-parsed-input div,
+article > div:first-child > #unpack .unpacked #unpack-rough-schema div {
+  position: relative;
+  z-index: 2;
+  padding: 0 0.5rem;
   margin: 0 0 0 1.5rem;
+  font-family: var(--font-family-monospace);
+  background-color: transparent;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 1px;
+  border-radius: 5px;
 }
 
-article .maintext #unpack .unpacked #unpack-rough-schema > div {
+article > div:first-child > #unpack .unpacked #unpack-rough-schema > div:first-child {
   margin: 0;
 }
 
-article .maintext #unpack .unpacked #unpack-parsed-input div,
-article .maintext #unpack .unpacked #unpack-rough-schema div {
-  background-color: transparent;
-  border-color: transparent;
-  border-radius: 5px;
-  border-style: solid;
-  border-width: 1px;
-  font-family: var(--font-family-monospace);
-  font-size: 95%;
-  padding: 0 0.5rem;
-  position: relative;
-  z-index: 2;
-}
-
-article .maintext #unpack .unpacked #unpack-parsed-input .highlighted::before,
-article .maintext #unpack .unpacked #unpack-rough-schema .highlighted::before {
+article > div:first-child > #unpack .unpacked #unpack-parsed-input .highlighted::before,
+article > div:first-child > #unpack .unpacked #unpack-rough-schema .highlighted::before { 
+  position: absolute;
+  top: 0;  
+  left: 0; 
+  z-index: 1; 
+  width: 100%;
+  height: 100%;
+  content: " ";
   background-color: var(--font-color);
   border-radius: 5px;
-  content: " ";
-  height: 100%;  
-  left: 0;
-  opacity: 0.05; 
-  position: absolute;
-  top: 0; 
-  width: 100%; 
-  z-index: 1;
+  opacity: 0.05;
 }
 
-/* custom syntax highlighting */
-
-article .maintext #unpack .unpacked .renamed-key {
+article > div:first-child > #unpack .unpacked .renamed-key {
   color: var(--color-3);
 }
 
-article .maintext #unpack .unpacked .boolean,
-article .maintext #unpack .unpacked .null {
+article > div:first-child > #unpack .unpacked .boolean,
+article > div:first-child > #unpack .unpacked .null {
   color: var(--color-4);
 }
 
-article .maintext #unpack .unpacked .number {
+article > div:first-child > #unpack .unpacked .number {
   color: var(--color-5);
 }
 
-article .maintext #unpack .unpacked .string {
+article > div:first-child > #unpack .unpacked .string {
   color: var(--color-6);
 }
 
-article .maintext #unpack .unpacked .key {
+article > div:first-child > #unpack .unpacked .key {
   color: var(--color-9);
+}
+
+@media screen and (width < 1000px) {
+  article > div:first-child > *:not(#unpack),
+  article > div:first-child > #unpack > *:not(.unpacked) {
+    max-width: var(--article-width);
+    margin: 1rem;
+  }
 }

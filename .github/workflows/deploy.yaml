@@ -10,43 +10,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout https://github.com/carnarez/polars-unpack repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up Node v16.x
-        uses: actions/setup-node@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '16.x'
+          node-version: '18.x'
 
       - name: Install Node dependencies
         run: |
-          npm install --global --no-audit --no-fund \
-            autoprefixer \
-            clean-css-cli \
-            html-minifier \
-            postcss-cli \
-            terser
+          npm install --global --no-audit --no-fund autoprefixer \
+                                                    cssnano \
+                                                    html-minifier \
+                                                    postcss-cli \
+                                                    terser
 
-      - name: Set up Python v3.10
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --no-cache-dir \
-            ghp-import \
-            git+https://github.com/carnarez/astdocs@master \
-            git+https://github.com/carnarez/markdown-extension-astdocs@master \
-            git+https://github.com/carnarez/markdown-extension-img@master \
-            git+https://github.com/carnarez/markdown-extension-insert@master \
-            git+https://github.com/carnarez/markdown-extension-script@master \
-            git+https://github.com/carnarez/markdown-render@master \
-            jinja2 \
-            lunr \
-            markdown \
-            pymdown-extensions \
-            pyyaml
+          python -m pip install --no-cache-dir ghp-import \
+                                               git+https://github.com/carnarez/astdocs@master \
+                                               git+https://github.com/carnarez/markdown-extension-astdocs@master \
+                                               git+https://github.com/carnarez/markdown-extension-img@master \
+                                               git+https://github.com/carnarez/markdown-extension-insert@master \
+                                               git+https://github.com/carnarez/markdown-extension-script@master \
+                                               git+https://github.com/carnarez/markdown-render@master \
+                                               jinja2 \
+                                               lunr \
+                                               markdown \
+                                               pymdown-extensions \
+                                               pyyaml
 
       - name: Render and bundle
         run: |
@@ -55,22 +53,27 @@ jobs:
           cp README.md web/index.md
           cp polars_unpack/unpack.py web/api
           cp tests/test_*.py web/tests
+
           (
             cd web/api
             ASTDOCS_WITH_LINENOS=1 astdocs unpack.py > index.md
             mv *.py ..
           )
+
           (
             cd web/tests
             ASTDOCS_WITH_LINENOS=1 astdocs . > index.md
             mv *.py ..
           )
+
           # render the documentation
           (
             cd web
+
             # will contain all rendered/bundled content
             mkdir /tmp/www
-            # prepare markdown files
+
+            # prepare and convert markdown files to html
             rm README.md
             find . -name "*.md" | grep -e front-matter.md -e toc.md -v | while read f; do
               mkdir -p /tmp/www/$(dirname $f)
@@ -78,32 +81,38 @@ jobs:
               mv /tmp/md $f
             done
             rm front-matter.md
-            # convert markdown to html
             render-markdown --prefix=/tmp/www \
                             --root=https://carnarez.github.io/polars-unpack/ \
                             $(find . -name "*.md" | grep -v toc.md)
             rm toc.md
-            # generate the splash 
-            python unpack_logo.py polars-logo.svg > /tmp/www/splash.svg
-            # modify html links
+
+            # prepare html files
             sed -i 's|href=\"/|href=\"/polars-unpack/|g;s|src=\"/|src=\"/polars-unpack/|g' $(find /tmp/www -name "*.html")
+
             # prepare css files
             git clone --depth=1 https://github.com/carnarez/markdown-render-styling.git
             cat markdown-render-styling/style.css markdown-render-styling/style-*.css | grep -v '@import ".*"' > _bundle.css
             cat *.css > /tmp/www/style.css
             rm -fr markdown-render-styling *.css
             find . -name "*.css" | while read f; do cp $f /tmp/www/$(dirname $f); done
+
             # prepare js files
             find . -name "*.js" | while read f; do cp $f /tmp/www/$(dirname $f); done
+
+            # generate the splash 
+            python unpack_logo.py polars-logo.svg > /tmp/www/splash.svg
           )
+
           # minify everything
           (
             cd /tmp/www
+
             # bundle css
             find . -name "*.css" | while read f; do
-              postcss $f --replace --use autoprefixer
-              cleancss --output $f $f
+              postcss $f --no-map --replace --use autoprefixer
+              postcss $f --no-map --replace --use cssnano
             done
+
             # bundle html
             find . -name "*.html" | while read f; do
               html-minifier --collapse-boolean-attributes \
@@ -121,6 +130,7 @@ jobs:
                             --use-short-doctype \
                             $f
             done
+
             # bundle js
             find . -name "*.js" | while read f; do terser --compress --mangle --module --output $f $f; done
           )
@@ -129,5 +139,6 @@ jobs:
         run: |
           (
             cd web
+
             ghp-import --branch www --force --push /tmp/www
           )
