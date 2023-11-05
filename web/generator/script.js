@@ -192,7 +192,7 @@ const addEventListeners = (object, otherObject) => {
 }
 
 // add to the page
-document.getElementById("unpack").innerHTML += `
+document.querySelector("#unpack").innerHTML += `
 <textarea
   id="unpack-json-input"
   placeholder="paste/edit your JSON content here"
@@ -205,10 +205,10 @@ document.getElementById("unpack").innerHTML += `
 `;
 
 // relevant object
-const input = document.getElementById("unpack-json-input")
+const input = document.querySelector("#unpack-json-input")
 
-const parsedInput = document.getElementById("unpack-parsed-input");
-const roughSchema = document.getElementById("unpack-rough-schema");
+const parsedInput = document.querySelector("#unpack-parsed-input");
+const roughSchema = document.querySelector("#unpack-rough-schema");
 
 // run the routine
 const process = (json) => {

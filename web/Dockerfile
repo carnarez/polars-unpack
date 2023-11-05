@@ -60,19 +60,18 @@ COPY generator/style.css generator/style.css
 RUN apk --no-cache add git \
  && npm config set update-notifier false \
  && npm install --global --no-audit --no-fund autoprefixer \
-                                              clean-css-cli \
+                                              cssnano \
                                               html-minifier \
                                               postcss-cli \
                                               terser \
     | grep -v ^$ \
- && git clone --depth=1 https://github.com/carnarez/markdown-render-styling.git \
- && cat markdown-render-styling/style.css markdown-render-styling/style-*.css | grep -v '@import ".*"' > _bundle.css \
- && cat *.css > bundle.css_ \
+ && git clone --branch=bundle --depth=1 https://github.com/carnarez/markdown-render-styling.git \
+ && cat markdown-render-styling/style.css *.css 2>/dev/null | grep -v '@import url("style-' > style.css_ \
  && rm -fr markdown-render-styling *.css \
- && mv bundle.css_ style.css \
+ && mv style.css_ style.css \
  && find . -name "*.css" | while read f; do \
-      postcss $f --replace --use autoprefixer; \
-      cleancss --output $f $f; \
+      postcss $f --no-map --replace --use autoprefixer; \
+      postcss $f --no-map --replace --use cssnano; \
     done \
  && find . -name "*.html" | while read f; do \
       html-minifier --collapse-boolean-attributes \
