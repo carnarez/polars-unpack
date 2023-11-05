@@ -50,7 +50,7 @@ article > div:first-child > #unpack .unpacked {
 
 article > div:first-child > #unpack .unpacked > div {
   flex-grow: 1;
-  max-height: calc(100vh - 3*var(--nav-height));
+  max-height: calc(100vh - 2*var(--top-nav-height));
   overflow: scroll;
   text-align: left;
   border-color: var(--background-color-alt);
