@@ -6,7 +6,7 @@ article > div:first-child {
 
 article > div:first-child > *:not(#unpack),
 article > div:first-child > #unpack > *:not(.unpacked) {
-  max-width: calc(var(--article-width) - 2rem);
+  max-width: calc(var(--article-width) - 3rem);
   margin: 1rem auto;
 }
 
@@ -87,6 +87,7 @@ article > div:first-child > #unpack .unpacked #unpack-rough-schema div {
   padding: 0 0.5rem;
   margin: 0 0 0 1.5rem;
   font-family: var(--font-family-monospace);
+  font-size: 95%;
   background-color: transparent;
   border-color: transparent;
   border-style: solid;
