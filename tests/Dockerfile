@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:slim
 
 ENV COVERAGE_FILE=/tmp/coverage
 

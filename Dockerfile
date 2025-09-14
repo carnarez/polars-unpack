@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:slim
 
-RUN pip install --upgrade pip \
- && pip install --no-cache-dir polars
+RUN pip install --root-user-action=ignore --upgrade pip uv \
+ && uv pip install --no-cache-dir --system polars

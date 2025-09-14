@@ -386,7 +386,7 @@ def test_real_life(df: pl.DataFrame) -> None:
     """
     df_csv = pl.scan_csv(
         "tests/samples/complex.csv",
-        dtypes={
+        schema_overrides={
             "timestamp": pl.Int64,
             "source": pl.String,
             "offset": pl.Int64,
