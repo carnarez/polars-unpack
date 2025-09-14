@@ -26,25 +26,25 @@ jobs:
                                                     terser
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install --no-cache-dir ghp-import \
-                                               git+https://github.com/carnarez/astdocs@master \
-                                               git+https://github.com/carnarez/markdown-extension-astdocs@master \
-                                               git+https://github.com/carnarez/markdown-extension-img@master \
-                                               git+https://github.com/carnarez/markdown-extension-insert@master \
-                                               git+https://github.com/carnarez/markdown-extension-script@master \
-                                               git+https://github.com/carnarez/markdown-render@master \
-                                               jinja2 \
-                                               lunr \
-                                               markdown \
-                                               pymdown-extensions \
-                                               pyyaml
+          python -m pip install --root-user-action=ignore --upgrade pip uv
+          python -m uv pip install --no-cache-dir --system ghp-import \
+                                                           git+https://github.com/carnarez/astdocs@master \
+                                                           git+https://github.com/carnarez/markdown-extension-astdocs@master \
+                                                           git+https://github.com/carnarez/markdown-extension-img@master \
+                                                           git+https://github.com/carnarez/markdown-extension-insert@master \
+                                                           git+https://github.com/carnarez/markdown-extension-script@master \
+                                                           git+https://github.com/carnarez/markdown-render@master \
+                                                           jinja2 \
+                                                           lunr \
+                                                           markdown \
+                                                           pymdown-extensions \
+                                                           pyyaml
 
       - name: Render and bundle
         run: |

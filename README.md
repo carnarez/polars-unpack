@@ -84,7 +84,7 @@ df = (
         new_columns=["raw"],
         separator="|",  # or any other character *absent* from the raw data
     )
-    .select(pl.col("raw").str.json_extract(s.struct))
+    .select(pl.col("raw").str.json_decode(s.struct))
     .unnest("raw")
     .json.unpack(s.struct)  # registered within the *frame namespaces
     .rename(s.json_paths)

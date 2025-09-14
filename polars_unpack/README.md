@@ -232,7 +232,7 @@ this same script.
 In the current `Polars` implementation this function is however better suited for the
 use case: the provided schema is always dominant, regardless of the content of the JSON
 file. We do not need to add or remove missing or supplementary columns, everything is
-taken care of by the `json_extract()` method.
+taken care of by the `json_decode()` method.
 
 ## Classes
 
@@ -562,12 +562,12 @@ Unpack JSON content into a `DataFrame` (or `LazyFrame`) given a schema.
 
 **Returns**
 
-- \[`polars.DataFrame | polars.LazyFrame`\]: Updated \[unpacked\] `Polars` `DataFrame`
-  (or `LazyFrame`) object.
+- \[`polars.DataFrame | polars.LazyFrame`\]: Updated [unpacked] `Polars` `DataFrame` (or
+  `LazyFrame`) object.
 
 **Notes**
 
-- The `polars.Array` is considered the \[obsolete\] ancestor of `polars.List` and
-  expected to behave identically.
+- The `polars.Array` is considered the [obsolete] ancestor of `polars.List` and expected
+  to behave identically.
 - Unpacked columns will be renamed as their full respective JSON paths to avoid
   potential identical names.

@@ -198,7 +198,7 @@ def infer_schema(path_data: str) -> str:
 
     # generate the pretty-printed schema
     schema = ""
-    for field, dtype in pl.scan_ndjson(path_data).schema.items():
+    for field, dtype in pl.scan_ndjson(path_data).collect_schema().items():
         schema += _pprint(f"{field}: ", dtype)
 
     return schema.strip()
@@ -257,7 +257,7 @@ def unpack_ndjson(path_schema: str, path_data: str) -> pl.LazyFrame:
         [
             pl.lit(None).cast(d).alias(p)
             for p, d in zip(s.json_paths.keys(), s.dtypes, strict=True)
-            if p not in df.columns
+            if p not in df.collect_schema().names()
         ],
     )
 
@@ -303,7 +303,7 @@ def unpack_text(
     In the current `Polars` implementation this function is however better suited for
     the use case: the provided schema is always dominant, regardless of the content of
     the JSON file. We do not need to add or remove missing or supplementary columns,
-    everything is taken care of by the `json_extract()` method.
+    everything is taken care of by the `json_decode()` method.
 
     """
     s = parse_schema(path_schema)
@@ -847,18 +847,18 @@ class UnpackFrame:
             for f in dtype.fields:
                 # rename column to json path
                 jp = f"{json_path}{self.separator}{f.name}".lstrip(self.separator)
-                if f.name in self._df.columns:
+                if f.name in self._df.collect_schema().names():
                     self._df = self._df.rename({f.name: jp})
                 # unpack
                 if type(f.dtype) in (pl.Array, pl.List):
                     self._df = self._df.explode(jp).json.unpack(f.dtype.inner, jp, jp)
-                elif type(f.dtype) == pl.Struct:
+                elif isinstance(f.dtype, pl.Struct):
                     self._df = self._df.unnest(jp).json.unpack(f.dtype, jp)
 
         return self._df
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     # infer schema from ndjson
     if len(sys.argv[1:]) == 1 and sys.argv[1].endswith("ndjson"):
         sys.stdout.write(f"{infer_schema(sys.argv[1])}\n")
